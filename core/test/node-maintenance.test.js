@@ -89,7 +89,7 @@ test("unreachable chain eventually fails health even without any head reading", 
  const {assessHealth, CORE_SERVICES}=require("../lib/koinos/node-health");
  const services=CORE_SERVICES.map(service=>({service,state:"running"}));
  assert.equal(assessHealth({services,probeFailed:true,lastHeightAt:0,now:600000}).reason,"chain-unresponsive");
- assert.equal(assessHealth({services,probeFailed:true,lastHeightAt:0,now:1000}).ok,true);
+ assert.equal(assessHealth({services,probeFailed:true,lastHeightAt:0,now:1000}).reason,"rpc-unavailable");
 });
 test("interrupted install marker prevents starts and deletion of recovery data", async t => {
  const root=fixture(t); const mgr=new NodeManager({dataRoot:root});

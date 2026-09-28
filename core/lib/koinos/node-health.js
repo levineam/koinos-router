@@ -8,10 +8,8 @@
 
 const GiB = 1024 * 1024 * 1024;
 
-// The services that must be healthy for the node to make progress. The API tier
-// (jsonrpc/grpc/rest/account_history/…) is deliberately excluded: it's optional,
-// and memory-saver mode drops it to shrink the footprint.
-const CORE_SERVICES = ["chain", "block_store", "mempool", "p2p"];
+// Messaging and the local RPC are required for the managed desktop node.
+const CORE_SERVICES = ["amqp", "chain", "block_store", "mempool", "p2p", "jsonrpc"];
 
 function coreServicesFor(producing) {
   return producing ? [...CORE_SERVICES, "block_producer"] : [...CORE_SERVICES];
@@ -26,6 +24,7 @@ function serviceTrouble(row) {
   const oom = /\(137\)/.test(status) || /oom/i.test(status) || row?.oomKilled === true;
   if (/restart/i.test(state) || /restarting/i.test(status)) return { down: true, oom };
   if (/exit|dead/i.test(state) || /\bexited\b/i.test(status)) return { down: true, oom };
+  if (/created|paused|removing/i.test(state) || row?.health === "unhealthy") return { down: true, oom };
   return { down: false, oom };
 }
 
@@ -72,9 +71,15 @@ function assessHealth({
     if (t.oom) anyOom = true;
   }
 
+  if (rows.some(r => expected.includes(r.service) && r.health === "starting")) {
+    return { ok: false, reason: "starting", oom: anyOom };
+  }
+
   if (probeFailed && lastHeightAt != null && now - lastHeightAt > stallMs) {
     return { ok: false, reason: "chain-unresponsive", oom: anyOom, service: "chain" };
   }
+
+  if (probeFailed) return { ok: false, reason: "rpc-unavailable", oom: anyOom, service: "jsonrpc" };
 
   // Every container claims "up" but the chain head hasn't moved for too long:
   // the node is wedged (the classic block_store-starves-chain deadlock).
@@ -95,6 +100,7 @@ function assessHealth({
 function describeRecovery(reason, oom) {
   if (oom || reason === "oom") return "Your node ran low on memory and stopped.";
   if (reason === "stalled") return "Your node stopped keeping up with the network.";
+  if (reason === "broker-unavailable") return "Your node’s internal message service is unavailable.";
   if (reason === "service-down") return "Part of your node stopped unexpectedly.";
   return "Your node stopped responding.";
 }
@@ -191,9 +197,9 @@ function mergeWslConfig(existing, { memoryGB, swapGB }) {
 
 // Classify a crash from a service's recent log text so the app can pick the
 // RIGHT remedy instead of blindly restarting. Some failures a restart fixes;
-// a code panic or on-disk corruption it never will — that data must be rebuilt.
+// a code panic alone is not evidence that rebuilding data will help.
 //   "oom"        -> killed for memory (restart + lighten footprint / more RAM)
-//   "panic"      -> segfault / nil-pointer / Go panic (deterministic — rebuild data)
+//   "panic"      -> segfault / nil-pointer / Go panic (needs diagnosis)
 //   "corruption" -> the database won't open cleanly (rebuild data)
 //   null         -> nothing recognizable (treat as transient)
 function classifyCrash(logText) {
@@ -210,7 +216,7 @@ function classifyCrash(logText) {
 // (rebuild block data via Quick Sync), or null (just restart).
 function crashRemedy(kind) {
   if (kind === "oom") return "memory";
-  if (kind === "panic" || kind === "corruption" || kind === "replay-mismatch") return "repair";
+  if (kind === "corruption" || kind === "replay-mismatch") return "repair";
   return null;
 }
 

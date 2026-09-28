@@ -4,6 +4,16 @@ const fsp = require("fs/promises");
 const path = require("path");
 const DATA_DIRS = ["chain", "block_store", "mempool", "transaction_store", "account_history", "contract_meta_store"];
 
+// Docker keeps logs across container restarts. Diagnose only the current
+// process lifetime when inspect provides its start time.
+function currentLogs(text, services = []) {
+  const starts = new Map(services.map(s => [s.service, Date.parse(s.startedAt)]));
+  return String(text).split(/\r?\n/).filter(line => {
+    const m = line.match(/^\s*([a-z_]+)(?:-\d+)?\s*\|\s*(\d{4}-\d\d-\d\dT[\d:.]+Z)/i);
+    return !m || !Number.isFinite(starts.get(m[1])) || Date.parse(m[2]) >= starts.get(m[1]);
+  }).join("\n");
+}
+
 function inspectLogs(text) {
   let health = null;
   if (/replayed state delta merkle root does not match block receipt/i.test(text)) {
@@ -125,4 +135,4 @@ async function deleteBackup(root, id) {
   await fsp.rm(target, { recursive: true });
   return { deleted: true };
 }
-module.exports = { assertRestoreReady, inspectLogs, preflightFolders, installSnapshot, backupList, deleteBackup };
+module.exports = { currentLogs, assertRestoreReady, inspectLogs, preflightFolders, installSnapshot, backupList, deleteBackup };
