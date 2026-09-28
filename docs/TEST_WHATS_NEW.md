@@ -3,7 +3,7 @@
 - Node startup waits for the internal RabbitMQ service to be ready. Health checks now include RabbitMQ and the local RPC, including unhealthy containers that still appear running.
 - Memory-saver mode reduces service jobs and keeps the local RPC available. Monitoring resumes for an already-running node when the app reopens.
 - Failed restarts and software panics no longer label chain data as corrupted or recommend repeated Quick Sync. Current-process chain validation failures still require attention.
-- Health checks ignore errors from before a container's latest restart. Recovery reports restart failures and waits for RPC confirmation before calling the node healthy. Manual Stop and snapshot restore remain protected from concurrent recovery.
+- Slow producer requests no longer trigger a restart while the chain is advancing. Health checks ignore errors from before a container's latest restart. Recovery reports restart failures and waits for RPC confirmation before calling the node healthy. Manual Stop and snapshot restore remain protected from concurrent recovery.
 
 ## Koinos AI mainnet API with backups
 

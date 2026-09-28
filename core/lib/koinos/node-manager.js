@@ -317,7 +317,7 @@ class NodeManager {
 
       const observed = await this.observe(w.networkId, services);
       if (this._watch !== w || !this._desiredRunning || w.recovering || this._op?.running) return;
-      const health = observed.health?.ok === false ? observed.health : assessHealth({
+      const runtimeHealth = assessHealth({
         services,
         producing: w.producing,
         probeFailed: !!this.probeHead && headHeight == null,
@@ -327,6 +327,10 @@ class NodeManager {
         now,
         stallMs: STALL_MS,
       });
+      // Producer timeouts also occur during catch-up. Never restart an advancing
+      // chain just because old timeout lines remain in the recent log window.
+      const health = observed.health?.ok === false && observed.health.reason !== "chain-unresponsive"
+        ? observed.health : runtimeHealth;
       w.health = health;
       const repairService = w.repairService || "chain";
       const lifetime = services.find(s => s.service === repairService)?.startedAt;
@@ -981,7 +985,7 @@ class NodeManager {
       dataDir: this.dirs(networkId).root,
       autoRecover: this.autoRecover,
       memorySaver: w?.memorySaver || false,
-      health: observed.health?.ok === false ? { ...observed.health, recovering: !!w?.recovering, lastRecoveryError: w?.lastRecoveryError || null } : w
+      health: observed.health?.ok === false && !(w && observed.health.reason === "chain-unresponsive") ? { ...observed.health, recovering: !!w?.recovering, lastRecoveryError: w?.lastRecoveryError || null } : w
         ? {
             ok: w.health?.ok !== false && !w.needsRepair,
             reason: w.needsRepair ? "needs-repair" : w.health?.reason || null,

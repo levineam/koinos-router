@@ -192,3 +192,23 @@ test("old sticky repair state cannot disable recovery of a new process", async t
   let recovered = false; mgr._recover = async () => { recovered = true; };
   await mgr._watchTick(); assert.equal(recovered, true); assert.equal(w.needsRepair, false);
 });
+
+test("producer timeouts cannot restart an advancing chain", async t => {
+  const mgr = fixture(t, { probeHead: async () => 101 }), w = watch(mgr);
+  w.lastHeight = 100; w.lastHeightAt = Date.now() - 10 * 60000;
+  mgr.services = async () => healthy();
+  mgr.observe = async () => ({ health: { ok: false, reason: "chain-unresponsive", service: "chain" } });
+  mgr._recover = async () => assert.fail("progressing chain must not be restarted for producer timeouts");
+  await mgr._watchTick(); assert.equal(w.health.ok, true);
+  mgr.dockerInfo = async () => ({ ok: true }); mgr.filesReady = () => true;
+  assert.equal((await mgr.status("mainnet")).health.ok, true);
+});
+
+test("a genuinely stalled chain is still recovered despite identical timeout logs", async t => {
+  const mgr = fixture(t, { probeHead: async () => 100 }), w = watch(mgr);
+  w.lastHeight = 100; w.lastHeightAt = Date.now() - 10 * 60000;
+  mgr.services = async () => healthy();
+  mgr.observe = async () => ({ health: { ok: false, reason: "chain-unresponsive", service: "chain" } });
+  let recovered = false; mgr._recover = async (_, h) => { recovered = true; assert.equal(h.reason, "stalled"); };
+  await mgr._watchTick(); assert.equal(recovered, true);
+});
