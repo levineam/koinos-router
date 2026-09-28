@@ -1,7 +1,7 @@
 {
   "name": "koinos-ai",
   "productName": "Koinos AI",
-  "version": "0.54.11",
+  "version": "0.54.12",
   "private": true,
   "description": "Koinos AI Core — local-first AI with a self-hosted OpenAI-compatible API",
   "license": "MIT",
