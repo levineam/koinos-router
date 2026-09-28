@@ -159,6 +159,17 @@ test("applying refuses when it would not be a clean fast-forward", async () => {
  * layer that a person has to agree to.
  */
 test("Core reports update state, and exposes no way to trigger one", async (t) => {
+  // Pull-request CI checks out a detached merge commit with no upstream.
+  // Exercise the route against a real, known git history instead of assuming
+  // the runner's checkout has a tracking branch.
+  const pair = mkPair(); advance(pair.origin, 2);
+  run(pair.clone, "fetch", "--quiet", "origin");
+  t.after(() => fs.rmSync(pair.root, { recursive: true, force: true }));
+  t.mock.method(require("../lib/source-update"), "inspect", (repoDir, options) => {
+    assert.equal(path.resolve(repoDir), path.resolve(__dirname, "../.."));
+    assert.equal(options.fetch, false);
+    return inspect(pair.clone, options);
+  });
   const { createCore } = require("../server");
   const core = await createCore({
     dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "kai-updroute-")), port: 0, onEvent: () => {},
@@ -169,9 +180,10 @@ test("Core reports update state, and exposes no way to trigger one", async (t) =
   const r = await fetch(`http://127.0.0.1:${port}/core/update`);
   const body = await r.json();
   assert.equal(r.status, 200);
-  // The suite runs inside this repo's own checkout, so it should recognise one.
   assert.equal(body.kind, "source");
-  assert.equal(typeof body.behind, "number");
+  assert.equal(body.behind, 2);
+  assert.equal(body.canCheck, true);
+  assert.equal(body.canApply, true);
 
   for (const method of ["POST", "PUT", "DELETE"]) {
     const w = await fetch(`http://127.0.0.1:${port}/core/update`, { method });
