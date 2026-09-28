@@ -262,6 +262,7 @@ function patchDashboardView() {
   const symbol = d.network.tokenSymbol;
   const running = !!(d.node && d.node.isRunning);
   const quickSync = d.node?.op?.running && d.node.op.name === "quick-sync";
+  const starting = !d.node?.health?.needsRepair && !d.node?.production?.reason && (d.node?.health?.recovering || ["starting", "rpc-unavailable"].includes(d.node?.health?.reason));
   const dockerOk = d.node && d.node.docker && d.node.docker.ok;
   const np = S.networkProducers;
   const matching = np?.network === d.network.id;
@@ -279,7 +280,7 @@ function patchDashboardView() {
   const text = $("#d-status-text");
   const sub = $("#d-status-sub");
   const toggle = $("#d-toggle");
-  dot.className = "dot " + (quickSync ? "amber" : d.node?.health?.ok === false || d.node?.production?.reason ? "red" : running ? "green" : "red");
+  dot.className = "dot " + (quickSync || starting ? "amber" : d.node?.health?.ok === false || d.node?.production?.reason ? "red" : running ? "green" : "red");
   if (quickSync) {
     KaiI18n.setText(text, "Quick syncing");
     text.className = "status-text warn-text";
@@ -287,6 +288,13 @@ function patchDashboardView() {
     KaiI18n.setText(toggle, "Quick sync in progress");
     toggle.className = "btn";
     toggle.dataset.action = "";
+  } else if (starting) {
+    KaiI18n.setText(text, d.node?.health?.recovering ? "Recovering" : "Starting");
+    text.className = "status-text warn-text";
+    KaiI18n.setText(sub, "Waiting for local RPC confirmation");
+    KaiI18n.setText(toggle, "Stop node");
+    toggle.className = "btn danger";
+    toggle.dataset.action = "stop";
   } else if (running) {
     KaiI18n.setText(text, d.node.health?.ok === false || d.node.production?.reason ? "Needs attention" : "Running");
     text.className = d.node.health?.ok === false || d.node.production?.reason ? "status-text bad-text" : "status-text good-text";
@@ -1650,10 +1658,10 @@ function patchNodeView() {
   const op = n?.op;
   const quickSync = op?.running && op.name === "quick-sync";
   if ($("#n-start")) $("#n-start").hidden = !n || !!n.isRunning;
-  if ($("#n-stop")) $("#n-stop").hidden = !n || !n.isRunning;
+  if ($("#n-stop")) $("#n-stop").hidden = !n || (!n.isRunning && op?.name !== "recover");
   for (const id of ["#n-start", "#n-stop", "#n-quicksync"]) {
     const button = $(id);
-    if (button) button.disabled = !!op?.running || !n;
+    if (button) button.disabled = (!!op?.running && !(id === "#n-stop" && op.name === "recover")) || !n;
   }
   if (quickSync) {
     const p = op.progress ?? {};
@@ -1681,7 +1689,8 @@ function patchNodeView() {
   const pill = $("#n-run-pill");
   if (pill) {
     pill.className = "pill " + (!quickSync && n?.isRunning && n?.health?.ok !== false && !n?.production?.reason ? "good" : "warn");
-    KaiI18n.setText(pill, quickSync ? (n?.isRunning ? "stopping for quick sync" : "stopped · quick syncing") : n?.isRunning ? (n?.health?.ok === false || n?.production?.reason ? "needs attention" : `running (${n.runningCount} services)`) : "stopped");
+    const starting = !n?.health?.needsRepair && !n?.production?.reason && ["starting", "rpc-unavailable"].includes(n?.health?.reason);
+    KaiI18n.setText(pill, !quickSync && n?.health?.recovering ? "recovering" : !quickSync && starting ? "starting" : quickSync ? (n?.isRunning ? "stopping for quick sync" : "stopped · quick syncing") : n?.isRunning ? (n?.health?.ok === false || n?.production?.reason ? "needs attention" : `running (${n.runningCount} services)`) : "stopped");
   }
 
   // friendly, jargon-free health line + auto-recover toggle state
@@ -1700,14 +1709,18 @@ function patchNodeView() {
         <div style="margin-top:8px"><button id="n-repair" class="btn primary" style="padding:6px 12px">🔧 Repair node data</button></div>
       </div>`;
       $("#n-repair")?.addEventListener("click", onQuickSync);
+    } else if (h?.recovering) {
+      healthEl.innerHTML = KaiI18n.html`<div class="banner info"><span class="spin"></span> Restarting node services. Waiting for the local RPC to respond.</div>`;
     } else if (!n?.isRunning) {
       healthEl.innerHTML = "";
     } else if (n?.production?.reason === "vhp-burn-rejected") {
       healthEl.innerHTML = KaiI18n.html`<div class="banner bad"><b>Block submissions rejected: could not burn VHP.</b> The node is running, but its last observed block attempt failed. For Koin Vault, connect the producer wallet and choose Allow VHP for block production above. This needs phone approval. Quick Sync does not fix wallet authorization.</div>`;
     } else if (n?.production?.reason) {
       healthEl.innerHTML = KaiI18n.html`<div class="banner bad"><b>Last observed block submission was rejected.</b> Open block_producer logs for the failure details. Running services and a registered key do not guarantee accepted blocks.</div>`;
-    } else if (h?.recovering) {
-      healthEl.innerHTML = KaiI18n.html`<div class="banner info"><span class="spin"></span> Getting your node back up — this takes a minute. You don't need to do anything.</div>`;
+    } else if (h?.reason === "broker-unavailable") {
+      healthEl.innerHTML = KaiI18n.html`<div class="banner bad"><b>The node's internal message service is unavailable.</b> The local RPC cannot respond until it recovers.${n?.autoRecover ? " Automatic recovery is enabled." : " Stop and start the node to retry."} Open amqp logs for the failure details. Quick Sync does not repair this service.</div>`;
+    } else if (["starting", "rpc-unavailable"].includes(h?.reason)) {
+      healthEl.innerHTML = KaiI18n.html`<div class="banner info">Node services are starting. Waiting for the local RPC before confirming node health.</div>`;
     } else if (h && h.ok === false) {
       healthEl.innerHTML = KaiI18n.html`<div class="banner bad">The node is not confirmed healthy (${esc(h.reason || "status unavailable")}). Block production may be interrupted. Check the chain logs${n?.autoRecover ? "; automatic recovery is enabled" : "; automatic recovery is off"}.</div>`;
     } else if (h?.memorySaver) {
@@ -1724,8 +1737,8 @@ function patchNodeView() {
     tbody.innerHTML = (n?.services ?? [])
       .map(
         (s) => KaiI18n.html`<tr><td class="mono">${esc(s.service)}</td>
-          <td><span class="pill ${/running|up/i.test(s.state) ? "good" : "warn"}">${esc(s.state)}</span></td>
-          <td class="muted">${esc(s.status)}</td></tr>`
+          <td><span class="pill ${/running|up/i.test(s.state) && !["unhealthy", "starting"].includes(s.health) ? "good" : "warn"}">${esc(s.health || s.state)}</span></td>
+          <td class="muted">${esc(s.status)}${s.oomKilled ? " · out of memory" : ""}${s.restartCount ? " · restarts: " + Number(s.restartCount) : ""}</td></tr>`
       )
       .join("") || KaiI18n.html`<tr><td class="muted">No services running.</td></tr>`;
   }

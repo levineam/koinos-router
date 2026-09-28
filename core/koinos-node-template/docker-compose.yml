@@ -2,6 +2,12 @@ services:
    amqp:
       image: rabbitmq:3-management
       restart: always
+      healthcheck:
+         test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_listener 5672"]
+         interval: 30s
+         timeout: 20s
+         retries: 3
+         start_period: 120s
       volumes:
          - "./config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
       configs:
@@ -15,7 +21,8 @@ services:
       image: koinos/koinos-chain:${CHAIN_TAG:-latest}
       restart: always
       depends_on:
-         - amqp
+         amqp:
+            condition: service_healthy
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -29,8 +36,10 @@ services:
       image: koinos/koinos-mempool:${MEMPOOL_TAG:-latest}
       restart: always
       depends_on:
-         - amqp
-         - chain
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -42,8 +51,10 @@ services:
       image: koinos/koinos-block-store:${BLOCK_STORE_TAG:-latest}
       restart: always
       depends_on:
-         - amqp
-         - chain
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -55,9 +66,12 @@ services:
       image: koinos/koinos-p2p:${P2P_TAG:-latest}
       restart: always
       depends_on:
-         - amqp
-         - block_store
-         - chain
+         amqp:
+            condition: service_healthy
+         block_store:
+            condition: service_started
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -72,9 +86,12 @@ services:
       restart: always
       profiles: ["block_producer", "all"]
       depends_on:
-         - amqp
-         - mempool
-         - chain
+         amqp:
+            condition: service_healthy
+         mempool:
+            condition: service_started
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -87,8 +104,10 @@ services:
       restart: always
       profiles: ["jsonrpc", "api", "all"]
       depends_on:
-         - amqp
-         - chain
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -105,8 +124,10 @@ services:
       restart: always
       profiles: ["grpc", "api", "all"]
       depends_on:
-         - amqp
-         - chain
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -121,8 +142,10 @@ services:
       restart: always
       profiles: ["transaction_store", "api", "all"]
       depends_on:
-         - amqp
-         - chain
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -135,8 +158,10 @@ services:
       restart: always
       profiles: ["contract_meta_store", "api", "all"]
       depends_on:
-         - amqp
-         - chain
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -149,9 +174,12 @@ services:
       restart: always
       profiles: ["account_history", "api", "all"]
       depends_on:
-        - amqp
-        - chain
-        - block_store
+         amqp:
+            condition: service_healthy
+         chain:
+            condition: service_started
+         block_store:
+            condition: service_started
       configs:
          - source: koinos-config
            target: /koinos/config.yml
@@ -164,7 +192,8 @@ services:
       restart: always
       profiles: ["rest", "api", "all"]
       depends_on:
-         - jsonrpc
+         jsonrpc:
+            condition: service_started
       ports:
          - "${REST_INTERFACE:-127.0.0.1}:${REST_PORT:-3000}:3000"
       environment:

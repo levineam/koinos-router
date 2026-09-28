@@ -136,3 +136,27 @@ test("VHP burn rejection overrides healthy services on Node and Dashboard", () =
   assert.equal($("#d-status-text").textContent, "Needs attention");
   assert.equal($("#d-dot").className, "dot red");
 });
+
+test("broker failure explains missing RPC without suggesting a data repair", () => {
+  const { S, $, paint } = painter(); S.node.isRunning = true;
+  S.node.health = { ok: false, reason: "broker-unavailable" };
+  S.node.services = [{ service: "amqp", state: "running", health: "unhealthy", status: "Up", restartCount: 4 }];
+  paint();
+  assert.match($("#n-health").innerHTML, /internal message service is unavailable/);
+  assert.match($("#n-services tbody").innerHTML, /unhealthy/);
+  assert.doesNotMatch($("#n-health").innerHTML, /Repair node data|Chain validation failed/);
+  S.node.health = { ok: false, reason: "starting" }; paint();
+  assert.match($("#n-health").innerHTML, /before confirming node health/);
+});
+
+test("starting and recovering are amber and recovery retains Stop", () => {
+  const { S, $, paint } = painter(); S.node.isRunning = true;
+  S.node.health = { ok: false, reason: "starting" }; paint();
+  assert.equal($("#d-status-text").textContent, "Starting");
+  assert.equal($("#d-dot").className, "dot amber");
+  S.node.health.recovering = true;
+  S.node.op = { name: "recover", running: true, tail: [] }; paint();
+  assert.equal($("#d-status-text").textContent, "Recovering");
+  assert.equal($("#n-stop").disabled, false);
+  assert.equal($("#n-quicksync").disabled, true);
+});
