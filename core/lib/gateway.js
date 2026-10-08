@@ -101,7 +101,7 @@ function hasImageParts(messages) {
 }
 
 class Gateway {
-  constructor({ host = "127.0.0.1", port = 41100, runtime, models, keys, coreInfo, uiDir, staticAssets, earn, network, feedback, chats, docs, voice, speech, turn, tools, memory, mcp, nodeRuntime, email, calendar, koinos, koinosNode, teams, account, dev, bench, agents, code, onEvent }) {
+  constructor({ host = "127.0.0.1", port = 41100, runtime, models, keys, coreInfo, uiDir, staticAssets, earn, network, feedback, chats, docs, voice, speech, turn, tools, memory, mcp, nodeRuntime, email, calendar, koinos, koinosNode, teams, account, dev, bench, agents, code, onEvent, extensions, earnHttpWrites = true }) {
     this.tools = tools || null; // unified tool registry (agents/MCP/memory/…)
     this.memory = memory || null; // cross-chat memory store
     this.mcp = mcp || null; // MCP server manager
@@ -149,6 +149,15 @@ class Gateway {
     // byte leaving the machine. Production leaves it null and gets the real
     // DuckDuckGo/Wikipedia search and page fetcher.
     this.groundIo = null;
+    // Product shells (Koinos Router) mount extra routes here. Each runs after
+    // the host and control-plane guards, before any built-in route, and
+    // returns true when it handled the request.
+    this.extensions = Array.isArray(extensions) ? extensions.filter((fn) => typeof fn === "function") : [];
+    // false (Koinos Router): wallet, earn and network-config WRITES are not
+    // HTTP routes. The shell drives them in-process behind its own dialogs;
+    // over HTTP, any header-less local process could swap or pre-seed the
+    // wallet or repoint the scheduler. Reads (GET) stay.
+    this.earnHttpWrites = earnHttpWrites !== false;
   }
 
   _coreAuthed(req) {
@@ -339,6 +348,14 @@ class Gateway {
           code: "cross_site_refused",
         },
       });
+    }
+
+    for (const extension of this.extensions) {
+      if (await extension(req, res, { url, path, gateway: this })) return;
+    }
+
+    if (!this.earnHttpWrites && req.method !== "GET" && (path.startsWith("/core/earn") || path === "/core/network/config")) {
+      return this._json(res, 404, { ok: false, error: "Not found" });
     }
 
     /*
@@ -1874,7 +1891,31 @@ class Gateway {
    * The privacy gate has already passed in the caller; this method owns
    * the spending checks (§8 budget, §23 signed identity) and the relay.
    */
-  async _chatNetwork(body, req, res, { overflowFrom, localError } = {}) {
+  async _chatNetwork(body, req, res, opts = {}) {
+    /*
+     * The scheduler holds ONE in-flight /consume per wallet and frees it when
+     * our upstream connection closes. A caller that hangs up (the Router
+     * delegate's job timeout aborts its loopback call; a user closes the
+     * chat) must therefore close the upstream call too — otherwise it runs on
+     * for up to 190 s, the wallet's slot stays taken, and the next request
+     * is refused 409 "still running". `res` "close" before the response
+     * finished means the client is gone (req "close" fires as soon as the
+     * body has been read, so it can't tell).
+     */
+    const clientGone = new AbortController();
+    const onClose = () => {
+      if (!res.writableFinished) clientGone.abort(new Error("client disconnected"));
+    };
+    if (res.destroyed || req.socket?.destroyed) clientGone.abort(new Error("client disconnected"));
+    else res.once("close", onClose);
+    try {
+      return await this._chatNetworkRelay(body, req, res, clientGone.signal, opts);
+    } finally {
+      res.removeListener("close", onClose);
+    }
+  }
+
+  async _chatNetworkRelay(body, req, res, clientGone, { overflowFrom, localError } = {}) {
     // On overflow, errors must say both truths: local couldn't serve, and
     // why the network fallback stopped — otherwise the user sees only half
     // the story and the fix (unlock wallet, raise budget) stays hidden.
@@ -1922,6 +1963,8 @@ class Gateway {
     if (!ident) {
       return fail(400, "Koinos Network requests are signed by your earning account — create or unlock it in the Earn tab first", "invalid_request_error");
     }
+    // The client left while we priced and signed: buy nothing for nobody.
+    if (clientGone.aborted) return;
     let upstream;
     try {
       upstream = await fetch(`${schedulerUrl.replace(/\/$/, "")}/consume/chat/completions`, {
@@ -1930,9 +1973,11 @@ class Gateway {
         // paid network request (see worker.js — same field finding).
         headers: { "content-type": "application/json", connection: "close" },
         body: JSON.stringify({ messages: body.messages, model: netModel, stream: !!body.stream, ...ident }),
-        signal: AbortSignal.timeout(190000), // streamed big-class answers run minutes
+        // Streamed big-class answers run minutes; a departed client ends it now.
+        signal: AbortSignal.any([AbortSignal.timeout(190000), clientGone]),
       });
     } catch (e) {
+      if (clientGone.aborted) return;
       return fail(502, `Network request failed: ${e.message}`, "server_error");
     }
     // Live network stream: relay scheduler SSE frames as OpenAI-style
@@ -1944,33 +1989,40 @@ class Gateway {
       let buf = "";
       const decoder = new TextDecoder();
       const emit = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
-      for await (const chunk of upstream.body) {
-        buf += decoder.decode(chunk, { stream: true });
-        let idx;
-        while ((idx = buf.indexOf("\n\n")) >= 0) {
-          const frame = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          for (const line of frame.split("\n")) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6).trim();
-            if (data === "[DONE]") continue;
-            let f;
-            try {
-              f = JSON.parse(data);
-            } catch {
-              continue;
+      try {
+        for await (const chunk of upstream.body) {
+          buf += decoder.decode(chunk, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            const frame = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            for (const line of frame.split("\n")) {
+              if (!line.startsWith("data: ")) continue;
+              const data = line.slice(6).trim();
+              if (data === "[DONE]") continue;
+              let f;
+              try {
+                f = JSON.parse(data);
+              } catch {
+                continue;
+              }
+              if (f.model && !servedModel) servedModel = f.model;
+              if (f.servedModel) servedModel = f.servedModel;
+              if (f.delta) {
+                emit({ object: "chat.completion.chunk", model: "koinos-network", servedModel, choices: [{ index: 0, delta: { content: f.delta } }] });
+              }
+              if (f.error) {
+                emit({ object: "chat.completion.chunk", model: "koinos-network", choices: [{ index: 0, delta: { content: `\n[network: ${f.error}]` } }] });
+              }
+              if (f.done) finalUsage = f.usage || null;
             }
-            if (f.model && !servedModel) servedModel = f.model;
-            if (f.servedModel) servedModel = f.servedModel;
-            if (f.delta) {
-              emit({ object: "chat.completion.chunk", model: "koinos-network", servedModel, choices: [{ index: 0, delta: { content: f.delta } }] });
-            }
-            if (f.error) {
-              emit({ object: "chat.completion.chunk", model: "koinos-network", choices: [{ index: 0, delta: { content: `\n[network: ${f.error}]` } }] });
-            }
-            if (f.done) finalUsage = f.usage || null;
           }
         }
+      } catch (e) {
+        // Our own abort (the client left) ends the relay quietly; anything
+        // else is a broken upstream and keeps its old handling.
+        if (clientGone.aborted) return res.end();
+        throw e;
       }
       if (meterKey && finalUsage) {
         const rates = await this._networkRates(schedulerUrl, servedModel || netModel);
@@ -1987,6 +2039,7 @@ class Gateway {
       return res.end();
     }
     const j = await upstream.json().catch(() => null);
+    if (clientGone.aborted) return;
     // Scheduler-side failures ("no providers online") go through fail() too —
     // relaying them raw dropped the local half of the story on overflow
     // (field finding: users saw only 'no providers serving "koinos-fast"'
