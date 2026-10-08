@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Router connect tools</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffffff;text-decoration:none}a:hover{color:#ffffff}
+.cta:hover{background:#0f4fd6}
+.sec:hover{background:#e6edf8}
+button:focus-visible,a:focus-visible{outline:2px solid #155eef;outline-offset:3px}
+</style>
+</helmet>
+<div style="width: 680px; height: 620px; box-sizing: border-box; padding: 40px; background: #e9eff8; font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; color: #14284e; -webkit-font-smoothing: antialiased;">
+  <div style="width: 600px; height: 540px; box-sizing: border-box; background: #fcfdff; border-radius: 14px; box-shadow: 0 0 0 0.5px rgba(20,40,78,0.14), 0 1px 2px rgba(20,40,78,0.06), 0 24px 60px -18px rgba(20,40,78,0.28); display: flex; flex-direction: column; overflow: hidden;">
+
+    <div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; padding: 0 20px;">
+      <div style="display: flex; gap: 8px;">
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; padding: 12px 48px 32px;">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.025em;">Connect your tools</h1>
+      <p style="margin: 8px 0 0; font-size: 15px; color: #5b6b86;">They’ll hand small tasks to KoinosAI and pay in KAI.</p>
+
+      <div style="margin-top: 28px; border-radius: 14px; background: #ffffff; box-shadow: 0 0 0 1px #e8edf5, 0 1px 2px rgba(20,40,78,0.04);">
+        <div style="display: flex; align-items: center; gap: 14px; height: 68px; padding: 0 14px 0 16px; border-bottom: 1px solid #f0f3f8;">
+          <span style="width: 36px; height: 36px; border-radius: 10px; background: #f1f5fb; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M13 17h6" fill="none" stroke="#14284e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">Codex</div>
+            <div style="font-size: 13px; color: #64738c;">Found on this Mac</div>
+          </div>
+          <sc-if value="{{codexOff}}" hint-placeholder-val="{{ true }}">
+            <button class="sec" type="button" onClick="{{connectCodex}}" style="height: 36px; padding: 0 16px; border-radius: 9px; border: 0; background: #eef3fb; font-family: inherit; font-size: 14px; font-weight: 600; color: #155eef; cursor: pointer;">Connect</button>
+          </sc-if>
+          <sc-if value="{{codexOn}}" hint-placeholder-val="{{ false }}">
+            <div style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 14px; font-weight: 500; color: #1a7f58;">
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#1a7f58" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>Connected</span>
+            </div>
+          </sc-if>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px; height: 68px; padding: 0 14px 0 16px;">
+          <span style="width: 36px; height: 36px; border-radius: 10px; background: #f1f5fb; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5" fill="none" stroke="#14284e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">Claude Code</div>
+            <div style="font-size: 13px; color: #64738c;">Found on this Mac</div>
+          </div>
+          <sc-if value="{{claudeOff}}" hint-placeholder-val="{{ true }}">
+            <button class="sec" type="button" onClick="{{connectClaude}}" style="height: 36px; padding: 0 16px; border-radius: 9px; border: 0; background: #eef3fb; font-family: inherit; font-size: 14px; font-weight: 600; color: #155eef; cursor: pointer;">Connect</button>
+          </sc-if>
+          <sc-if value="{{claudeOn}}" hint-placeholder-val="{{ false }}">
+            <div style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 14px; font-weight: 500; color: #1a7f58;">
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#1a7f58" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>Connected</span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <p style="margin: 16px 2px 0; font-size: 13px; line-height: 1.5; color: #64738c;">Tasks run on other people’s computers. Router blocks anything that looks like a password or key.</p>
+
+      <div style="flex-grow: 1;"></div>
+
+      <div style="display: flex; justify-content: flex-end;">
+        <a class="cta" href="Main.dc.html" style="height: 44px; padding: 0 26px; display: inline-flex; align-items: center; border-radius: 10px; background: #155eef; font-size: 15px; font-weight: 600; box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 6px 16px -6px rgba(21,94,239,0.6);">Done</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":680,"height":620}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { codex: false, claude: false };
+  }
+  renderVals() {
+    const codex = this.state.codex;
+    const claude = this.state.claude;
+    return {
+      codexOn: codex,
+      codexOff: !codex,
+      claudeOn: claude,
+      claudeOff: !claude,
+      connectCodex: () => this.setState({ codex: true }),
+      connectClaude: () => this.setState({ claude: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

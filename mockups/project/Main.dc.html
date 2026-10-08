@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Router main window</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#64738c;text-decoration:none}a:hover{color:#14284e}
+button:focus-visible,a:focus-visible{outline:2px solid #155eef;outline-offset:2px;border-radius:8px}
+</style>
+</helmet>
+<div style="width: 680px; height: 620px; box-sizing: border-box; padding: 40px; background: #e9eff8; font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; color: #14284e; -webkit-font-smoothing: antialiased;">
+  <div style="width: 600px; height: 540px; box-sizing: border-box; background: #fcfdff; border-radius: 14px; box-shadow: 0 0 0 0.5px rgba(20,40,78,0.14), 0 1px 2px rgba(20,40,78,0.06), 0 24px 60px -18px rgba(20,40,78,0.28); display: flex; flex-direction: column; overflow: hidden;">
+
+    <div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 18px; padding: 0 20px; border-bottom: 1px solid #edf1f7;">
+      <div style="display: flex; gap: 8px;">
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <img src="/_blob/e8305d69385acb9e447161b7a6153e39" alt="" width="20" height="20" style="display: block;">
+        <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">Router</span>
+      </div>
+      <div style="margin-left: auto; font-size: 15px; font-weight: 500; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;">{{balance}} <span style="color: #64738c; font-weight: 400;">KAI</span></div>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 8px 0 4px;">
+      <div style="position: relative; width: 200px; height: 184px; display: flex; align-items: center; justify-content: center;">
+        <sc-if value="{{active}}" hint-placeholder-val="{{ true }}">
+          <div style="position: absolute; left: -10px; top: -18px; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(closest-side, rgba(3,206,250,0.26), rgba(8,86,249,0.10) 60%, rgba(8,86,249,0) 100%);"></div>
+          <div style="position: relative; width: 148px; height: 148px; border-radius: 50%; background: radial-gradient(circle at 50% 30%, #ffffff 0%, #eef7ff 26%, #cfe6ff 60%, #9fccff 88%, #82b9ff 100%); box-shadow: inset 0 -14px 28px rgba(8,86,249,0.22), inset 0 10px 18px rgba(255,255,255,0.95), 0 0 0 1px rgba(255,255,255,0.9), 0 26px 50px -14px rgba(8,86,249,0.40); display: flex; align-items: center; justify-content: center;">
+            <img src="/_blob/e8305d69385acb9e447161b7a6153e39" alt="" width="72" height="72" style="display: block;">
+          </div>
+        </sc-if>
+        <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+          <div style="position: relative; width: 148px; height: 148px; border-radius: 50%; background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f5f7fa 40%, #e2e7ee 100%); box-shadow: inset 0 -12px 24px rgba(20,40,78,0.07), inset 0 10px 18px rgba(255,255,255,0.95), 0 0 0 1px #e4e9f0, 0 22px 40px -18px rgba(20,40,78,0.22); display: flex; align-items: center; justify-content: center;">
+            <img src="/_blob/e8305d69385acb9e447161b7a6153e39" alt="" width="72" height="72" style="display: block; filter: grayscale(1); opacity: 0.45;">
+          </div>
+        </sc-if>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #3d4d69;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: {{dot}};"></span>
+        <span>{{status}}</span>
+      </div>
+    </div>
+
+    <div style="margin: 0 32px; border-top: 1px solid #edf1f7;"></div>
+
+    <div style="display: flex; align-items: center; gap: 16px; padding: 16px 22px 16px 32px;">
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px;">
+        <div style="font-size: 17px; font-weight: 600; letter-spacing: -0.015em;">Share compute</div>
+        <sc-if value="{{shareOn}}" hint-placeholder-val="{{ true }}">
+          <div style="font-size: 14px; font-weight: 500; color: #155eef; font-variant-numeric: tabular-nums;">+6.4 KAI today</div>
+        </sc-if>
+        <sc-if value="{{shareOff}}" hint-placeholder-val="{{ false }}">
+          <div style="font-size: 14px; color: #5b6b86;">Earn KAI when your Mac is idle</div>
+        </sc-if>
+      </div>
+      <button type="button" role="switch" aria-checked="{{shareAria}}" aria-label="Share compute" onClick="{{toggleShare}}" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; cursor: pointer;">
+        <span style="position: relative; display: block; width: 38px; height: 22px; border-radius: 11px; background: {{shareTrack}}; transition: background 0.2s;">
+          <span style="position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(20,40,78,0.25), 0 0 0 0.5px rgba(20,40,78,0.08); transform: translateX({{shareKnob}}); transition: transform 0.2s;"></span>
+        </span>
+      </button>
+    </div>
+
+    <div style="margin: 0 32px; border-top: 1px solid #edf1f7;"></div>
+
+    <div style="display: flex; align-items: center; gap: 16px; padding: 16px 22px 16px 32px;">
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px;">
+        <div style="font-size: 17px; font-weight: 600; letter-spacing: -0.015em;">Use KoinosAI</div>
+        <div style="font-size: 14px; color: #5b6b86;">Spend KAI on AI for Codex and Claude Code</div>
+      </div>
+      <sc-if value="{{useOn}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #3d4d69;">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #1f9d6b;"></span>
+          <span>Connected</span>
+        </div>
+      </sc-if>
+      <button type="button" role="switch" aria-checked="{{useAria}}" aria-label="Use KoinosAI" onClick="{{toggleUse}}" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; cursor: pointer;">
+        <span style="position: relative; display: block; width: 38px; height: 22px; border-radius: 11px; background: {{useTrack}}; transition: background 0.2s;">
+          <span style="position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(20,40,78,0.25), 0 0 0 0.5px rgba(20,40,78,0.08); transform: translateX({{useKnob}}); transition: transform 0.2s;"></span>
+        </span>
+      </button>
+    </div>
+
+    <div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 32px; border-top: 1px solid #edf1f7; font-size: 13px;">
+      <a href="Activity.dc.html">Activity</a>
+      <span style="width: 1px; height: 14px; background: #dfe5ee;"></span>
+      <a href="Settings.dc.html">Settings</a>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":680,"height":620}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { share: true, use: true };
+  }
+  renderVals() {
+    const share = this.state.share;
+    const use = this.state.use;
+    const active = share || use;
+    let status = 'Paused';
+    let dot = '#b3bdcb';
+    if (share) { status = 'Earning'; dot = '#1f9d6b'; }
+    else if (use) { status = 'Ready'; dot = '#1f9d6b'; }
+    return {
+      balance: '42.8',
+      active: active,
+      paused: !active,
+      status: status,
+      dot: dot,
+      shareOn: share,
+      shareOff: !share,
+      useOn: use,
+      shareAria: share ? 'true' : 'false',
+      useAria: use ? 'true' : 'false',
+      shareTrack: share ? '#155eef' : '#d6dce6',
+      useTrack: use ? '#155eef' : '#d6dce6',
+      shareKnob: share ? '16px' : '0px',
+      useKnob: use ? '16px' : '0px',
+      toggleShare: () => this.setState({ share: !share }),
+      toggleUse: () => this.setState({ use: !use })
+    };
+  }
+}
+</script>
+</body>
+</html>

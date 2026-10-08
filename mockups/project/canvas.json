@@ -1,0 +1,148 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Activity.dc.html": {
+      "h": 650,
+      "is_interactive": true,
+      "radius": 16,
+      "title": "Activity",
+      "w": 680,
+      "x": 1520,
+      "y": 0
+    },
+    "Connect.dc.html": {
+      "h": 620,
+      "is_interactive": true,
+      "radius": 16,
+      "title": "Connect tools",
+      "w": 680,
+      "x": 760,
+      "y": 2130
+    },
+    "Main.dc.html": {
+      "h": 620,
+      "is_interactive": true,
+      "radius": 16,
+      "title": "Main window",
+      "w": 680,
+      "x": 0,
+      "y": 0
+    },
+    "MenuBar.dc.html": {
+      "h": 620,
+      "is_interactive": true,
+      "radius": 16,
+      "title": "Menu bar",
+      "w": 680,
+      "x": 760,
+      "y": 0
+    },
+    "OutOfKAI.dc.html": {
+      "h": 620,
+      "radius": 16,
+      "title": "Out of KAI",
+      "w": 680,
+      "x": 1520,
+      "y": 1130
+    },
+    "Paused.dc.html": {
+      "h": 620,
+      "radius": 16,
+      "title": "Paused",
+      "w": 680,
+      "x": 760,
+      "y": 1130
+    },
+    "Settings.dc.html": {
+      "h": 750,
+      "is_interactive": true,
+      "radius": 16,
+      "title": "Settings",
+      "w": 680,
+      "x": 2280,
+      "y": 0
+    },
+    "Waiting.dc.html": {
+      "h": 620,
+      "radius": 16,
+      "title": "Waiting for idle",
+      "w": 680,
+      "x": 0,
+      "y": 1130
+    },
+    "Welcome.dc.html": {
+      "h": 620,
+      "is_interactive": true,
+      "radius": 16,
+      "title": "Welcome",
+      "w": 680,
+      "x": 0,
+      "y": 2130
+    },
+    "Fonts.dc.html": {
+      "x": 0,
+      "y": 3130,
+      "w": 2000,
+      "h": 1340,
+      "title": "Font options",
+      "radius": 16
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-07T17:58:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "everyday": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Everyday",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "firstrun": {
+      "kind": "title1",
+      "maxW": 1440,
+      "text": "First run",
+      "w": 240,
+      "x": 0,
+      "y": 1870
+    },
+    "states": {
+      "kind": "title1",
+      "maxW": 2200,
+      "text": "States",
+      "w": 240,
+      "x": 0,
+      "y": 870
+    },
+    "fonts": {
+      "kind": "title1",
+      "maxW": 2000,
+      "text": "Font options",
+      "w": 240,
+      "x": 0,
+      "y": 2870
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "MenuBar.dc.html",
+    "Activity.dc.html",
+    "Settings.dc.html",
+    "Waiting.dc.html",
+    "Paused.dc.html",
+    "OutOfKAI.dc.html",
+    "Welcome.dc.html",
+    "Connect.dc.html",
+    "Fonts.dc.html"
+  ],
+  "pages": [],
+  "title": "KoinosAI Router"
+}

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Router settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#14284e;text-decoration:none}a:hover{color:#155eef}
+select{-webkit-appearance:none;appearance:none}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #155eef;outline-offset:2px;border-radius:8px}
+</style>
+</helmet>
+<div style="width: 680px; height: 750px; box-sizing: border-box; padding: 40px; background: #e9eff8; font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; color: #14284e; -webkit-font-smoothing: antialiased;">
+  <div style="width: 600px; height: 670px; box-sizing: border-box; background: #fcfdff; border-radius: 14px; box-shadow: 0 0 0 0.5px rgba(20,40,78,0.14), 0 1px 2px rgba(20,40,78,0.06), 0 24px 60px -18px rgba(20,40,78,0.28); display: flex; flex-direction: column; overflow: hidden;">
+
+    <div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 18px; padding: 0 20px; border-bottom: 1px solid #edf1f7;">
+      <div style="display: flex; gap: 8px;">
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+        <span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12);"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <img src="/_blob/e8305d69385acb9e447161b7a6153e39" alt="" width="20" height="20" style="display: block;">
+        <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">Router</span>
+      </div>
+      <div style="margin-left: auto; font-size: 15px; font-weight: 500; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;">42.8 <span style="color: #64738c; font-weight: 400;">KAI</span></div>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 18px; padding: 20px 32px 28px;">
+      <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
+        <a href="Main.dc.html" aria-label="Back" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="#14284e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </a>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Settings</h1>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 13px; font-weight: 600; color: #64738c;">Share compute</div>
+        <div style="border-radius: 12px; background: #ffffff; box-shadow: 0 0 0 1px #e8edf5;">
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 8px 0 16px; border-bottom: 1px solid #f0f3f8;">
+            <label for="when" style="flex-grow: 1; font-size: 14px; font-weight: 500;">When</label>
+            <div style="position: relative;">
+              <select id="when" style="height: 32px; padding: 0 30px 0 12px; border-radius: 8px; border: 0; background: #f1f5fb; font-family: inherit; font-size: 13px; font-weight: 500; color: #14284e; cursor: pointer;">
+                <option>Only when idle</option>
+                <option>Always</option>
+              </select>
+              <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; right: 11px; top: 10px; pointer-events: none;"><path d="M6 9l6 6 6-6" fill="none" stroke="#14284e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 6px 0 16px;">
+            <div style="flex-grow: 1; font-size: 14px; font-weight: 500;">Only when plugged in</div>
+            <button type="button" role="switch" aria-checked="true" aria-label="Only when plugged in" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; cursor: pointer;">
+              <span style="position: relative; display: block; width: 38px; height: 22px; border-radius: 11px; background: #155eef;">
+                <span style="position: absolute; top: 2px; left: 18px; width: 18px; height: 18px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(20,40,78,0.25);"></span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 13px; font-weight: 600; color: #64738c;">Use KoinosAI</div>
+        <div style="border-radius: 12px; background: #ffffff; box-shadow: 0 0 0 1px #e8edf5;">
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 8px 0 16px; border-bottom: 1px solid #f0f3f8;">
+            <label for="limit" style="flex-grow: 1; font-size: 14px; font-weight: 500;">Daily limit</label>
+            <div style="position: relative;">
+              <select id="limit" style="height: 32px; padding: 0 30px 0 12px; border-radius: 8px; border: 0; background: #f1f5fb; font-family: inherit; font-size: 13px; font-weight: 500; color: #14284e; font-variant-numeric: tabular-nums; cursor: pointer;">
+                <option>5 KAI</option>
+                <option selected="">10 KAI</option>
+                <option>25 KAI</option>
+                <option>No limit</option>
+              </select>
+              <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; right: 11px; top: 10px; pointer-events: none;"><path d="M6 9l6 6 6-6" fill="none" stroke="#14284e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 8px 0 16px; border-bottom: 1px solid #f0f3f8;">
+            <div style="flex-grow: 1; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 500;">Codex</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #4f5f7a;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #1f9d6b;"></span>Connected</span>
+            </div>
+            <button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: #f1f5fb; font-family: inherit; font-size: 13px; font-weight: 500; color: #14284e; cursor: pointer;">Disconnect</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 8px 0 16px;">
+            <div style="flex-grow: 1; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 500;">Claude Code</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #4f5f7a;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #1f9d6b;"></span>Connected</span>
+            </div>
+            <button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: #f1f5fb; font-family: inherit; font-size: 13px; font-weight: 500; color: #14284e; cursor: pointer;">Disconnect</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 13px; font-weight: 600; color: #64738c;">General</div>
+        <div style="border-radius: 12px; background: #ffffff; box-shadow: 0 0 0 1px #e8edf5;">
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 6px 0 16px; border-bottom: 1px solid #f0f3f8;">
+            <div style="flex-grow: 1; font-size: 14px; font-weight: 500;">Open at login</div>
+            <button type="button" role="switch" aria-checked="true" aria-label="Open at login" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; cursor: pointer;">
+              <span style="position: relative; display: block; width: 38px; height: 22px; border-radius: 11px; background: #155eef;">
+                <span style="position: absolute; top: 2px; left: 18px; width: 18px; height: 18px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(20,40,78,0.25);"></span>
+              </span>
+            </button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 8px 0 16px;">
+            <div style="flex-grow: 1; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 500;">Wallet</span>
+              <span style="font-size: 12.5px; color: #4f5f7a; font-variant-numeric: tabular-nums;">1Kq7…f3cQ</span>
+            </div>
+            <button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: #f1f5fb; font-family: inherit; font-size: 13px; font-weight: 500; color: #14284e; cursor: pointer;">Back up</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":680,"height":750}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
