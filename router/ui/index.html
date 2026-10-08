@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Koinos Router</title>
+<link rel="icon" href="assets/logo-128.png">
+<link rel="stylesheet" href="styles.css">
+<script src="common.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body class="window" data-view="main">
+
+<header class="titlebar">
+  <div class="brand">
+    <img class="brand-logo" src="assets/logo-128.png" alt="" width="20" height="20">
+    <span class="brand-name">Router</span>
+  </div>
+  <div class="balance" aria-label="Balance"><span id="balance-value">—</span> <span class="unit">KAI</span></div>
+</header>
+
+<main class="views">
+
+  <section class="view view-main" id="view-main" aria-label="Router">
+    <div class="hero">
+      <div class="orb-wrap" id="orb" data-orb="paused" data-preparing="false">
+        <div class="orb-glow" aria-hidden="true"></div>
+        <svg class="orb-ring" viewBox="0 0 184 184" aria-hidden="true">
+          <circle class="orb-ring-track" cx="92" cy="92" r="88"></circle>
+          <circle class="orb-ring-bar" id="orb-ring-bar" cx="92" cy="92" r="88" stroke-dasharray="552.92" stroke-dashoffset="552.92"></circle>
+        </svg>
+        <div class="orb"><img class="orb-logo" src="assets/logo.png" alt="" width="72" height="72"></div>
+      </div>
+      <p class="headline" id="headline" data-tone="none" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span><span id="headline-text"></span>
+      </p>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="toggle-row">
+      <div class="toggle-text">
+        <div class="row-title" id="share-title">Share compute</div>
+        <div class="row-sub" id="share-detail">Earn KAI when your Mac is idle</div>
+      </div>
+      <button type="button" class="switch" id="share-switch" role="switch" aria-checked="false" aria-labelledby="share-title" aria-describedby="share-detail">
+        <span class="switch-track"><span class="switch-knob"></span></span>
+      </button>
+    </div>
+
+    <div class="rule"></div>
+
+    <div class="toggle-row">
+      <div class="toggle-text">
+        <div class="row-title" id="use-title">Use KoinosAI</div>
+        <div class="row-sub" id="use-detail">Spend KAI on AI for Codex and Claude Code</div>
+      </div>
+      <div class="badge" id="use-connected" hidden><span class="badge-dot" aria-hidden="true"></span><span>Connected</span></div>
+      <button type="button" class="switch" id="use-switch" role="switch" aria-checked="false" aria-labelledby="use-title" aria-describedby="use-detail">
+        <span class="switch-track"><span class="switch-knob"></span></span>
+      </button>
+    </div>
+
+    <nav class="footer" aria-label="More">
+      <a href="#activity">Activity</a>
+      <span class="footer-sep" aria-hidden="true"></span>
+      <a href="#settings">Settings</a>
+    </nav>
+  </section>
+
+  <section class="view view-page view-activity" id="view-activity" aria-labelledby="activity-title" hidden>
+    <div class="page-head">
+      <a class="back" href="#main" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </a>
+      <h1 class="page-title" id="activity-title" tabindex="-1">Activity</h1>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Earned today</div>
+        <div class="stat-value stat-value--earn"><span id="earned-today">0.0</span> <span class="stat-unit">KAI</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Spent today</div>
+        <div class="stat-value"><span id="spent-today">0.0</span> <span class="stat-unit">KAI</span></div>
+      </div>
+    </div>
+    <div class="activity-scroll" id="activity-list"></div>
+  </section>
+
+  <section class="view view-page view-settings" id="view-settings" aria-labelledby="settings-title" hidden>
+    <div class="page-head">
+      <a class="back" href="#main" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </a>
+      <h1 class="page-title" id="settings-title" tabindex="-1">Settings</h1>
+    </div>
+
+    <div class="group" role="group" aria-labelledby="set-share-label">
+      <h2 class="group-label" id="set-share-label">Share compute</h2>
+      <div class="card">
+        <div class="set-row">
+          <label class="set-label" for="set-when">When</label>
+          <span class="select">
+            <select id="set-when">
+              <option value="idle">Only when idle</option>
+              <option value="always">Always</option>
+            </select>
+            <svg class="select-chev" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </span>
+        </div>
+        <div class="set-row set-row--switch">
+          <div class="set-label" id="set-plugged-label">Only when plugged in</div>
+          <button type="button" class="switch" id="set-plugged" role="switch" aria-checked="false" aria-labelledby="set-plugged-label">
+            <span class="switch-track"><span class="switch-knob"></span></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="group" role="group" aria-labelledby="set-use-label">
+      <h2 class="group-label" id="set-use-label">Use KoinosAI</h2>
+      <div class="card">
+        <div class="set-row">
+          <label class="set-label" for="set-limit">Daily limit</label>
+          <span class="select">
+            <select id="set-limit">
+              <option value="5">5 KAI</option>
+              <option value="10">10 KAI</option>
+              <option value="25">25 KAI</option>
+              <option value="none">No limit</option>
+            </select>
+            <svg class="select-chev" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </span>
+        </div>
+        <div class="set-row" data-conn="codex">
+          <div class="set-main">
+            <span class="set-name">Codex</span>
+            <span class="set-meta"><span class="set-dot" aria-hidden="true"></span><span class="conn-label">Not connected</span></span>
+          </div>
+          <button type="button" class="btn-quiet conn-btn" aria-label="Connect Codex">Connect</button>
+        </div>
+        <div class="set-row" data-conn="claude">
+          <div class="set-main">
+            <span class="set-name">Claude Code</span>
+            <span class="set-meta"><span class="set-dot" aria-hidden="true"></span><span class="conn-label">Not connected</span></span>
+          </div>
+          <button type="button" class="btn-quiet conn-btn" aria-label="Connect Claude Code">Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="group" role="group" aria-labelledby="set-general-label">
+      <h2 class="group-label" id="set-general-label">General</h2>
+      <div class="card">
+        <div class="set-row set-row--switch">
+          <div class="set-label" id="set-login-label">Open at login</div>
+          <button type="button" class="switch" id="set-login" role="switch" aria-checked="false" aria-labelledby="set-login-label">
+            <span class="switch-track"><span class="switch-knob"></span></span>
+          </button>
+        </div>
+        <div class="set-row">
+          <div class="set-main">
+            <span class="set-name">Wallet</span>
+            <span class="set-meta" id="wallet-address">Not set up yet</span>
+          </div>
+          <button type="button" class="btn-quiet" id="wallet-backup">Back up</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view view-welcome" id="view-welcome" aria-labelledby="welcome-title" hidden>
+    <div class="orb-wrap orb-wrap--welcome" data-orb="earning" aria-hidden="true">
+      <div class="orb-glow"></div>
+      <div class="orb"><img class="orb-logo" src="assets/logo.png" alt="" width="68" height="68"></div>
+    </div>
+    <h1 class="welcome-title" id="welcome-title" tabindex="-1">Earn AI compute credits while your computer is idle.</h1>
+    <p class="welcome-sub">Use AI compute credits in your favorite harness.</p>
+    <a class="cta" href="#connect">Get started</a>
+    <a class="quiet-link" href="#restore">I already use Koinos Router on another Mac</a>
+  </section>
+
+  <section class="view view-onboard" id="view-connect" aria-labelledby="connect-title" hidden>
+    <h1 class="onboard-title" id="connect-title" tabindex="-1">Connect your tools</h1>
+    <p class="lede">They’ll hand small tasks to KoinosAI and pay in KAI.</p>
+    <div class="tool-card">
+      <div class="tool-row" data-tool="codex">
+        <span class="tool-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M5 7l5 5-5 5M13 17h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </span>
+        <div class="tool-text">
+          <div class="tool-name">Codex</div>
+          <div class="tool-sub">Looking on this Mac…</div>
+        </div>
+        <button type="button" class="btn-secondary tool-btn" aria-label="Connect Codex">Connect</button>
+        <div class="tool-done" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span>Connected</span>
+        </div>
+      </div>
+      <div class="tool-row" data-tool="claude">
+        <span class="tool-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </span>
+        <div class="tool-text">
+          <div class="tool-name">Claude Code</div>
+          <div class="tool-sub">Looking on this Mac…</div>
+        </div>
+        <button type="button" class="btn-secondary tool-btn" aria-label="Connect Claude Code">Connect</button>
+        <div class="tool-done" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span>Connected</span>
+        </div>
+      </div>
+    </div>
+    <p class="disclosure">Tasks run on other people’s computers. Router blocks anything that looks like a password or key.</p>
+    <p class="inline-error" id="connect-error" role="alert" hidden></p>
+    <div class="spacer"></div>
+    <div class="actions">
+      <button type="button" class="cta" id="connect-done">Done</button>
+    </div>
+  </section>
+
+  <section class="view view-onboard" id="view-restore" aria-labelledby="restore-title" hidden>
+    <h1 class="onboard-title" id="restore-title" tabindex="-1">Use your existing balance</h1>
+    <p class="lede">Paste the recovery key from Settings › Back up on your other Mac.</p>
+    <form class="restore-form" id="restore-form" novalidate>
+      <label class="field-label" for="restore-key">Recovery key</label>
+      <textarea class="field" id="restore-key" rows="3" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="restore-error"></textarea>
+      <p class="inline-error" id="restore-error" role="alert" hidden></p>
+    </form>
+    <div class="spacer"></div>
+    <div class="actions actions--split">
+      <button type="button" class="btn-soft" id="restore-back">Back</button>
+      <button type="submit" class="cta" form="restore-form" id="restore-continue">Continue</button>
+    </div>
+  </section>
+
+</main>
+
+<p class="notice" id="notice" role="status" aria-live="polite"></p>
+
+</body>
+</html>

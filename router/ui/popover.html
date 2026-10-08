@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" class="popover-page">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Koinos Router</title>
+<link rel="icon" href="assets/logo-128.png">
+<link rel="stylesheet" href="styles.css">
+<script src="common.js" defer></script>
+<script src="popover.js" defer></script>
+</head>
+<body class="popover">
+
+<div class="panel" id="panel">
+  <div class="pop-balance">
+    <div class="pop-amount" aria-label="Balance">
+      <span class="pop-value" id="pop-balance">—</span>
+      <span class="pop-unit">KAI</span>
+    </div>
+    <div class="pop-today"><span class="pop-earned" id="pop-earned">+0.0 earned</span> · <span id="pop-spent">0.0 spent today</span></div>
+  </div>
+
+  <div class="pop-rule"></div>
+
+  <div class="pop-toggles">
+    <div class="pop-row">
+      <div class="pop-text">
+        <div class="pop-title" id="pop-share-title">Share compute</div>
+        <div class="pop-sub" id="pop-share-status" aria-live="polite">Off</div>
+      </div>
+      <button type="button" class="switch switch--sm" id="pop-share" role="switch" aria-checked="false" aria-labelledby="pop-share-title" aria-describedby="pop-share-status">
+        <span class="switch-track"><span class="switch-knob"></span></span>
+      </button>
+    </div>
+    <div class="pop-row">
+      <div class="pop-text">
+        <div class="pop-title" id="pop-use-title">Use KoinosAI</div>
+        <div class="pop-sub" id="pop-use-status" aria-live="polite">Off</div>
+      </div>
+      <button type="button" class="switch switch--sm" id="pop-use" role="switch" aria-checked="false" aria-labelledby="pop-use-title" aria-describedby="pop-use-status">
+        <span class="switch-track"><span class="switch-knob"></span></span>
+      </button>
+    </div>
+  </div>
+
+  <p class="pop-error" id="pop-error" role="status" aria-live="polite"></p>
+
+  <div class="pop-rule"></div>
+
+  <div class="pop-menu">
+    <a class="mi" id="pop-open" href="index.html#main">Open Router</a>
+    <button type="button" class="mi" id="pop-quit">Quit</button>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,81 @@
+# Koinos Router packaging (MVP_SPEC §8.1). Build from the repo root:
+#   npm run dist:router
+# which runs router/scripts/dist-router.js: with a stable signing identity
+# (router/scripts/setup-dev-signing.sh makes one) it packs with signing off,
+# re-signs the app with that identity, then builds the dmg and zip from it;
+# without one it is a plain ad-hoc build of this config.
+# The full Koinos AI app keeps its own config in package.json "build".
+
+appId: io.koinosai.router
+productName: Koinos Router
+directories:
+  output: dist-router
+  buildResources: build
+extraMetadata:
+  main: router/main.js
+  name: koinos-router
+  productName: Koinos Router
+# The router profile loads no native modules, so there is nothing to rebuild.
+npmRebuild: false
+
+files:
+  - package.json
+  - core/**
+  - "!core/test/**"
+  - "!core/bench/**"
+  - "!core/koinos-node-template/**"
+  - router/**
+  - "!router/test/**"
+  # Build and signing helpers run from the checkout, never inside the app.
+  - "!router/scripts/**"
+  - "!router/ui/dev-mock.js"
+  # Never required by the router profile (router/test/shell.test.js boots
+  # createRouterCore and checks require.cache against this list).
+  - "!node_modules/onnxruntime-node{,/**}"
+  - "!node_modules/onnxruntime-web{,/**}"
+  - "!node_modules/onnxruntime-common{,/**}"
+  - "!node_modules/sherpa-onnx*{,/**}"
+  - "!node_modules/kokoro-js{,/**}"
+  - "!node_modules/@huggingface{,/**}"
+  - "!node_modules/phonemizer{,/**}"
+  - "!node_modules/@ricky0123{,/**}"
+  - "!node_modules/playwright-core{,/**}"
+  # sharp is only a dependency of @huggingface/transformers; leaving it out
+  # also drops the only native binaries the package would carry.
+  - "!node_modules/sharp{,/**}"
+  - "!node_modules/@img{,/**}"
+
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  icon: router/assets/icon.icns
+  category: public.app-category.utilities
+  minimumSystemVersion: "12.0"
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  artifactName: Koinos-Router-${version}-${arch}.${ext}
+  extendInfo:
+    LSUIElement: true
+
+# Lock the packaged binary down. The main process holds the wallet password,
+# the machine secret and the unlocked signer, and the Keychain trusts this
+# binary: no ELECTRON_RUN_AS_NODE, NODE_OPTIONS or --inspect/SIGUSR1 way to run
+# other code inside it, and only the integrity-checked app.asar loads. The
+# router profile spawns no Electron-as-Node child (see shell.test.js).
+# resetAdHocDarwinSignature: flipping fuses breaks the arm64 ad-hoc signature;
+# the stable identity dist-router.js signs with is applied after this.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
+  resetAdHocDarwinSignature: true
+
+# No auto-update feed until Developer ID signing and notarization exist.
+publish: null
