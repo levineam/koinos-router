@@ -24,16 +24,24 @@ core/lib/gateway.js           + `extensions` hook (Router mounts /mcp/<token> an
                               + `earnHttpWrites` option, client-disconnect abort on network chat
 core/test/router-profile-core.test.js
 router/
-  README.md                   run from source, local demo, build, signing, data, tests, limits
+  README.md                   download and install, then run from source, local demo, build,
+                              signing, data, tests, limits
   ARCHITECTURE.md             this file
+  RELEASE_NOTES-<version>.md  GitHub release notes for router-v<version> (testers)
   main.js                     Electron main (menu-bar app): tray, popover, main window, idle loop
   preload.js                  contextBridge → window.routerShell (IPC only; no Node in renderer)
   electron-builder.yml        packaging for Koinos Router (appId io.koinosai.router), fuses
-  assets/                     icon.icns, icon.png, logo.png, trayTemplate.png, trayTemplate@2x.png
+  assets/                     icon.icns, icon.png, logo.png, trayTemplate.png, trayTemplate@2x.png,
+                              dmg-background.png + @2x (DMG window only; not packaged)
   scripts/
     local-demo.js             `npm run router:demo`: the real app against a local fake network
-    dist-router.js            `npm run dist:router`: electron-builder + signing with a picked identity
+    dist-router.js            `npm run dist:router`: Router's version, electron-builder, signing with a
+                              picked identity, notarization (Developer ID only), DMG and zip
     sign-router.js            picks a code-signing identity and re-signs the built app
+    notarize-router.js        notarytool submit + staple, for Developer ID builds with credentials
+    release-assets.js         `npm run release:router:assets`: check the dmg/zip, SHA256SUMS.txt, print
+                              the `gh release create` command (never runs it)
+    make-dmg-background.js    draws assets/dmg-background*.png (`--check` compares)
     setup-dev-signing.sh      `npm run router:setup-signing`: one-time self-signed identity
   lib/
     router-core.js            createRouterCore(): createCore(profile router) + Router services + routes
@@ -49,6 +57,7 @@ router/
     mac-signals.js            Electron powerMonitor + pmset/sysctl reader (Electron-only)
     secrets.js                safeStorage-backed secrets (machine secret, wallet password)
     keychain-access.js        is macOS about to ask for the Keychain item? (signature compare + copy)
+    update-check.js           update notice: is there a newer router-v* GitHub release? (never installs)
   ui/                         renderer pages, served by the Router gateway at "/"
     index.html  app.js  styles.css     main window (views: main, activity, settings, welcome,
                                        connect, restore)
@@ -67,6 +76,9 @@ router/
 |---|---|
 | appId | `io.koinosai.router` |
 | productName | `Koinos Router` (in-app title: "Router") |
+| Router version | **0.1.0** (`ROUTER_VERSION` in `router/scripts/dist-router.js` → `extraMetadata.version` → Info.plist, `app.getVersion()`, artifact names). Core stays **0.54.12** (`package.json`, `core/package.json`) |
+| Release tag | `router-v<version>` on `levineam/koinos-router` (GitHub Releases: DMG, zip, `SHA256SUMS.txt`) |
+| Update notice source | `https://api.github.com/repos/levineam/koinos-router/releases/latest` (packaged builds only) |
 | Gateway port | **41110** (falls back to an OS port if taken; always read the actual port) |
 | Electron userData | `~/Library/Application Support/Koinos Router`; with `KOINOS_ROUTER_DATA`, `<that dir>/electron` |
 | Data dir | `<userData>/core`; override `KOINOS_ROUTER_DATA` |
@@ -83,10 +95,12 @@ Environment variables the Router shell and Core read:
 | `KOINOS_ROUTER_DATA` | Data dir (and `<dir>/electron` as the Chromium profile, so its single-instance lock is separate from the installed app's) |
 | `KOINOS_ROUTER_HARNESS_HOME` | Home directory Connectors use for `~/.codex`, `~/.claude`, `~/.claude.json` and the skills. The local demo points it at a sandbox. The `~/Library` delegate guard stays on the real home |
 | `KOINOS_ROUTER_SMOKE=1` | Same as `--smoke` |
+| `KOINOS_ROUTER_NO_UPDATE_CHECK=1` | The shell never asks GitHub for a newer release (smoke runs and unpackaged runs never ask anyway) |
 | `KAI_SCHEDULER_URL` | Scheduler base URL (Core) |
 | `KAI_LLAMA_BIN` | Forces the llama-server binary (Core); the demo uses `core/test/fixtures/fake-llama-server` |
 | `KAI_CORE_TOKEN` | Optional bearer for `/core/*` (Core); the loopback delegate call and the smoke check send it |
-| `KOINOS_ROUTER_SIGN_IDENTITY`, `KOINOS_ROUTER_SIGN_KEYCHAIN`, `KOINOS_ROUTER_DIST_OUT` | Build only (`dist-router.js`): signing identity (`-` = ad-hoc), keychain to search, output dir |
+| `KOINOS_ROUTER_SIGN_IDENTITY`, `KOINOS_ROUTER_SIGN_KEYCHAIN`, `KOINOS_ROUTER_DIST_OUT`, `KOINOS_ROUTER_ARCHS` | Build only (`dist-router.js`): signing identity (`-` = ad-hoc; releases use it), keychain to search, output dir, architectures (`arm64` default, `x64`) |
+| `APPLE_API_KEY` + `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`, or `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID`, or `KOINOS_NOTARY_PROFILE` (+ `KOINOS_NOTARY_KEYCHAIN`) | Build only: notary credentials (`notarize-router.js`); used only for a Developer ID build |
 
 ## Core changes (additive)
 
@@ -166,8 +180,16 @@ type Status = {
          detail: string,           // exact subtitle copy for the Use KoinosAI row
          connected: { codex: boolean, claude: boolean } },
   wallet: { exists: boolean, address: string|null },
+  app: { version: string|null,                         // packaged builds: Router's version; else null
+         update: { available: boolean, version: string|null, url: string|null },  // update notice
+         hints: { menuBar: "notch"|"menu-bar"|null } }, // one-time "where's the icon?" hint
 }
 ```
+
+`Status.app` comes from a provider the shell sets (`service.setAppInfo(fn)`; the shell calls
+`service.appInfoChanged()` when the answer changes). Without one, or when it throws, every field is
+empty (`version: null`, no update, no hint). `update` is passed through only when `available` is
+`true` and `version` and `url` are strings.
 
 Copy (exact strings, from the approved mockups; `router-service.js` `COPY` and `idle-policy.js`
 `REASONS`):
@@ -230,7 +252,8 @@ used as is), `router.connected.codex` / `router.connected.claude` (Router connec
 set on connect, `false` on disconnect; only these configs are auto-repaired), `router.walletRestored`
 (set by `restoreWallet`; onboarding never auto-enables Share on a restored wallet),
 `router.mcpSessions` (`[[sessionId, harness], …]`, newest 200, so a harness keeps its name across a
-Router restart).
+Router restart), `router.hints.menuBar` (`"done"` once the menu-bar hint was dismissed or the
+person clicked the menu-bar icon; written by the shell).
 
 ## Module contracts
 
@@ -496,11 +519,37 @@ codesign failure explains only when a record exists). Identity = designated requ
 cdhash when the build has no team ID, because the item's partition list ties non-team code to its
 exact cdhash.
 
+### `router/lib/update-check.js`
+
+Plain Node (fetch, clock and timers injected). Router has no update feed and never downloads or
+installs anything; this only tells the UI that a newer Router exists.
+
+```js
+createUpdateCheck({ currentVersion, fetchImpl = fetch, now, intervalMs = 24h, firstCheckMs = 30 s,
+                    tickMs = 1h, timeoutMs = 5 s, setTimer, clearTimer, onChange, onEvent })
+  → { start(), stop(), check({ force }) → Promise<Update>, current() → Update, lastAttemptAt }
+// Update = { available: boolean, version: string|null, url: string|null }
+updateFrom(release, currentVersion) → Update   // a GitHub "latest release" body
+versionFromTag("router-v0.1.1") → "0.1.1"      // null for any other tag
+compareVersions(a, b) → -1|0|1|null            // semver precedence, prereleases below their release
+isReleaseUrl(url) → boolean                    // https://github.com/levineam/koinos-router/releases[/…] only
+releasePageUrl(version) → ".../releases/tag/router-v<version>"
+```
+- One unauthenticated `GET RELEASES_API` (`…/repos/levineam/koinos-router/releases/latest`), 5 s
+  timeout, `User-Agent: KoinosRouter/<version>`. Nothing about the Mac or the wallet is sent.
+- First check 30 s after `start()`, then at most once per 24 h by the wall clock (a failed check
+  counts; a clock set backwards checks again), looked at hourly.
+- Drafts, prereleases, tags that aren't `router-vX.Y.Z`, and anything malformed mean "no update".
+  A failed check keeps the last answer. Never throws; `onChange` fires only when the answer changes.
+- The only URL it hands out is the release page built from the tag, and it must pass
+  `isReleaseUrl()`, the same check the shell's navigation guard applies to external links.
+
 ### `router/lib/router-service.js`
 
 `class RouterService extends EventEmitter` — constructed by `createRouterCore` with
 `{ core, ledger, delegate, connectors, settings, fetchImpl, now, otherAppEarning, laptop,
-walletPassword, pricedModels }`. Owns the toggles → Core mapping:
+walletPassword, pricedModels, appInfo }` (`appInfo`: optional `Status.app` provider, usually set
+later by the shell with `setAppInfo`). Owns the toggles → Core mapping:
 - Use on ⇒ `network.configure({ privacyMode: "network" })`; Use off ⇒ `"local-only"` (sharing works
   in any privacy mode). Re-asserted on every launch.
 - Share on ⇒ ensure wallet, ensure the engine and a share model are downloaded (auto-pick, progress),
@@ -640,9 +689,27 @@ carries no hint; it is recorded in the ledger with what was spent. After each ru
   positioned under the tray icon, hides on blur or Esc). Right-click: Open Router, Quit Koinos Router.
 - Main window: 600×540, not resizable, `titleBarStyle: "hiddenInset"`, loads `http://127.0.0.1:<port>/`.
   First run (`!onboarded`) opens it at `#welcome`. Closing a window only hides it.
-- Pages may navigate only to themselves; our other page opens in its window, external http(s) links
-  in the browser, anything else is dropped. All permission requests are denied. Renderer:
-  `contextIsolation`, `sandbox`, no `nodeIntegration`, CSP `default-src 'self'`.
+- **Window at launch** (`showMainAtLaunch`): a launch by hand (Finder, Launchpad, Spotlight,
+  `open`) shows the main window; only a launch macOS made at login
+  (`app.getLoginItemSettings().wasOpenedAtLogin`) stays in the menu bar, unless onboarding isn't done.
+  An unknown answer shows it; smoke never does. Opening Router again while it runs (`activate`, or
+  `second-instance` from `open -n`) also shows it. Reason: no Dock icon, and on a notched MacBook a
+  crowded menu bar can hide the tray icon, so a launch that showed nothing would look broken.
+- **Menu-bar hint** (`notchState`, `menuBarHint`): after onboarding the main window may show a
+  one-time hint about where the icon lives: `"notch"` when the built-in display's menu bar is at
+  least 32 pt tall (a notched screen; Electron has no safe-area insets), `"menu-bar"` when that
+  can't be told (no built-in screen in use, a hidden menu bar), none on a Mac known to have no
+  notch. Dismissing it (`routerShell.dismissHint("menuBar")`) or clicking the tray icon stores
+  `router.hints.menuBar = "done"`.
+- **Update notice**: packaged, non-smoke runs (and not with `KOINOS_ROUTER_NO_UPDATE_CHECK=1`) start
+  `createUpdateCheck({ currentVersion: app.getVersion() })` after boot; its answer is
+  `Status.app.update`, and the pages show "Update available" with a link to the release page
+  (Renderer, below). Router never downloads or installs anything. A build run from the checkout has
+  no Router version and doesn't ask.
+- Pages may navigate only to themselves; our other page opens in its window; only Router's GitHub
+  release pages (`isReleaseUrl`, the update notice's link) open in the browser; anything else is
+  dropped. All permission requests are denied. Renderer: `contextIsolation`, `sandbox`, no
+  `nodeIntegration`, CSP `default-src 'self'`.
 - Idle controller (5 s) with `mac-signals.js` → `service.setShareGate()`. `createGateKick` also
   re-runs it on every service `status`/`settings` event whose Share on/off, When or plugged-in-only
   differ from the last ones seen (coalesced per turn; the event a tick causes ends there), so the
@@ -653,7 +720,9 @@ carries no hint; it is recorded in the ledger with what was spent. After each ru
   (MVP_SPEC §6.1); re-evaluated on `on-ac`/`on-battery`. `resume` and `unlock-screen` nudge the worker.
 - Login item: when packaged. At launch the OS state wins (a removal in System Settings › Login Items
   is copied into `router.general.openAtLogin`; only a first launch registers); afterwards the OS is
-  changed only when the user changes "Open at login".
+  changed only when the user changes "Open at login". A copy running from the mounted DMG
+  (`/Volumes/…`) or a Gatekeeper App Translocation path (`transientAppLocation`) leaves the login
+  item alone entirely, so it never registers a path that disappears.
 - Recovery-key backup: `systemPreferences.promptTouchID()` every time (its user-presence check falls
   back to the login password where Touch ID is unavailable); never an unauthenticated confirm. A Mac
   with no login password gets "Set a login password for this Mac, then try again." The key is shown
@@ -671,9 +740,10 @@ carries no hint; it is recorded in the ledger with what was spent. After each ru
   profile spawns no Electron-as-Node child (`shell.test.js`).
 - IPC (all `ipcMain.handle`, sender must be one of our two windows' main frame on our origin):
   `router:open` (view), `router:close-popover`, `router:quit`, `router:backup-wallet` (main only),
-  `router:restore-wallet` (wif; main only), `router:popover-height` (px; popover only).
-  `window.routerShell` methods: `backupWallet`, `closePopover`, `open`, `popoverHeight`, `quit`,
-  `restoreWallet`.
+  `router:restore-wallet` (wif; main only), `router:popover-height` (px; popover only),
+  `router:dismiss-hint` (name; main only).
+  `window.routerShell` methods: `backupWallet`, `closePopover`, `dismissHint`, `open`,
+  `popoverHeight`, `quit`, `restoreWallet`.
 - `--smoke` flag (or `KOINOS_ROUTER_SMOKE=1`): boot everything with hidden windows, check
   `GET /core/router/status` and both windows' `routerShell` bridge, print `SMOKE OK <port>`, then quit
   (exit 0); any boot error or no status within 45 s → `SMOKE FAIL …`, exit 1. Without
@@ -693,8 +763,16 @@ carries no hint; it is recorded in the ledger with what was spent. After each ru
   status poll.
 - Toggles are optimistic and revert with the server's error sentence if a request fails.
 - `ui/dev-mock.js` (`node router/ui/dev-mock.js [port]`, default 41190) serves the pages with an
-  in-memory API and scenarios (`?scenario=earning|waiting|paused|outofkai|preparing|firstrun|notools`)
-  for design review. It is excluded from the package.
+  in-memory API and scenarios
+  (`?scenario=earning|waiting|paused|outofkai|preparing|firstrun|notools|update`; `update` = a newer
+  release plus the notch hint) for design review. It is excluded from the package.
+- `Status.app` in the pages: Settings › General › **Version** shows `app.version` ("Development
+  build" when null) and, with an update, "· Update available: <version>" and a **Download** link to
+  `app.update.url` (only a `https://github.com/levineam/koinos-router/releases…` URL is used). The
+  popover shows an **Update available** line that opens Settings. The main view shows the
+  menu-bar hint (`notch`: "Router lives in your menu bar. Can’t see it? It may be hidden behind the
+  notch."; `menu-bar`: "Router lives in your menu bar, at the top of your screen.") with a dismiss
+  button that calls `routerShell.dismissHint("menuBar")`.
 
 ## Local demo (`router/scripts/local-demo.js`)
 
@@ -714,30 +792,56 @@ stand-in for the network:
 ## Packaging and signing (`router/electron-builder.yml`, `router/scripts/dist-router.js`)
 
 `npm run dist:router` (`node router/scripts/dist-router.js [electron-builder args]`) →
-`dist-router/Koinos-Router-<version>-arm64.dmg|zip` (`KOINOS_ROUTER_DIST_OUT` for another
+`dist-router/Koinos-Router-<ROUTER_VERSION>-<arch>.dmg|zip` (`KOINOS_ROUTER_DIST_OUT` for another
 directory), macOS 12+, hardened runtime with `build/entitlements.mac*.plist`, `LSUIElement: true`,
 `npmRebuild: false`, the fuses above (`resetAdHocDarwinSignature` re-signs after the fuse flip),
 `publish: null` (no update feed).
-Excluded: `router/test`, `ui/dev-mock.js`, `core/test`, `core/bench`, `core/koinos-node-template`,
-and node modules the router profile never loads (onnxruntime, sherpa-onnx, kokoro-js,
-@huggingface, phonemizer, @ricky0123, playwright-core, sharp, @img).
+Excluded: `router/test`, `router/scripts`, `ui/dev-mock.js`, `assets/dmg-*`, `core/test`,
+`core/bench`, `core/koinos-node-template`, and node modules the router profile never loads
+(onnxruntime, sherpa-onnx, kokoro-js, @huggingface, phonemizer, @ricky0123, playwright-core, sharp,
+@img).
+
+Version and architectures:
+- `ROUTER_VERSION` (`dist-router.js`, **0.1.0**) is Router's version. `dist-router.js` never builds
+  `electron-builder.yml` as is: per architecture it writes a temp copy with
+  `extraMetadata.version = ROUTER_VERSION`, `mac.target` narrowed to that architecture and
+  `mac.notarize: false`, and builds from that. So the Info.plist (`CFBundleShortVersionString`),
+  `app.getVersion()` (which the update notice compares), the `package.json` inside `app.asar` and
+  the artifact names carry 0.1.0, while the repo's `package.json` stays at 0.54.12, the KoinosAI
+  release Core is built on (the full app uses it; Core's own `coreInfo().version` comes from
+  `core/package.json`, also 0.54.12, in every build). The MCP `serverInfo.version` reads the root
+  `package.json`, so it is 0.1.0 in a packaged build and 0.54.12 from the checkout. Every build
+  checks that the built app's `CFBundleShortVersionString` equals `ROUTER_VERSION`.
+- Architectures: `KOINOS_ROUTER_ARCHS` (comma-separated `arm64`, `x64`; default `arm64`), not
+  `--arm64`/`--x64` (refused). Releases ship arm64 only for now.
+- DMG (`dmg:` in `electron-builder.yml`): a 540×380 window titled "Koinos Router" with the app at
+  (140, 180), an Applications link at (400, 180), 96 pt icons and an arrow between them on
+  `assets/dmg-background.png` (+ `@2x`, drawn by `scripts/make-dmg-background.js`; its
+  `DMG_LAYOUT` and the YAML must agree). `writeUpdateInfo: false`: no blockmaps.
 
 Signing:
 - electron-builder signs only with identities macOS calls valid, and a self-signed one never is.
   So `dist-router.js` picks the identity itself (`sign-router.js` `pickIdentity`, first match):
-  `KOINOS_ROUTER_SIGN_IDENTITY` (name or SHA-1; `-` forces ad-hoc; a missing one is an error) →
+  `KOINOS_ROUTER_SIGN_IDENTITY` (name or SHA-1; `-` = ad-hoc; a missing one is an error) →
   a valid `Developer ID Application:` → a valid `Apple Development:` / `Mac Developer:` → the
   self-signed `Koinos Router Local` (untrusted is fine; expired or revoked is not) → none.
   `KOINOS_ROUTER_SIGN_KEYCHAIN` limits the search and signing to one keychain file.
-- With an identity: (1) `electron-builder --dir -c.mac.identity=null` packs the app and flips the
-  fuses; (2) `sign-router.js` re-signs it inside-out with `@electron/osx-sign` (hardened runtime,
-  app/inherit entitlements, identity validation off, no timestamp for non-Apple identities; only
-  signatures change, the fuses and asar integrity stay); (3) `electron-builder --prepackaged <app>`
-  builds the DMG and ZIP (skipped with `--dir`). Without one: a plain ad-hoc build and a note on how
-  to get an identity.
+- With an identity, ad-hoc (`-`) included, per architecture: (1) `electron-builder --dir` with
+  signing off packs the app and flips the fuses; (2) `sign-router.js` re-signs it inside-out with
+  `@electron/osx-sign` (hardened runtime, app/inherit entitlements, identity validation off; Apple's
+  timestamp only for Apple identities; only signatures change, the fuses and asar integrity stay);
+  (3) a Developer ID build with notary credentials is notarized and stapled (below);
+  (4) `electron-builder --prepackaged <app>` builds the DMG and ZIP from that app (skipped with
+  `--dir`); (5) a notarized build's DMG is signed, notarized and stapled too. With no identity at
+  all (none found, none named): a plain ad-hoc electron-builder build and a note on how to get one.
+- **Release builds are ad-hoc** (`KOINOS_ROUTER_SIGN_IDENTITY=-`) until there is a Developer ID.
+  An Apple Development certificate is for the owner's own Macs: Apple's terms don't cover giving
+  builds signed with it to other people, and its certificate subject carries the owner's Apple ID
+  email. `dist-router.js` prints a reminder whenever it signs with one.
 - Keychain effect: the item `Koinos Router Safe Storage` trusts the app by its designated
   requirement, and its partition list by team ID, or by exact cdhash for code without one.
-  - ad-hoc: **every new build asks once** for the login keychain password;
+  - ad-hoc: **every new build asks once** for the login keychain password (for testers: once per
+    update; a fresh install creates the item and never asks);
   - Apple Development / Developer ID (team ID): "Always Allow" survives rebuilds;
   - `Koinos Router Local`: same designated requirement across builds, but no team ID, so a rebuild
     may still ask once (`dist-router.js` says so after signing).
@@ -747,7 +851,50 @@ Signing:
   trust settings changed). It is for this Mac only and does not help Gatekeeper.
   `KOINOS_SIGN_IDENTITY`, `KOINOS_SIGN_KEYCHAIN`, `KOINOS_SIGN_KEYCHAIN_PASSWORD` override the name
   and keychain (tests use a throwaway keychain).
-- Developer ID + notarization + an update feed are M4 (MVP_SPEC §8.1, §9).
+
+Notarization (`router/scripts/notarize-router.js`; ready, unused until there is a Developer ID):
+- `decide({ identity, env })` notarizes only a `Developer ID Application:` build with complete
+  credentials, first complete set wins: `APPLE_API_KEY` (path to the `.p8`) + `APPLE_API_KEY_ID` +
+  `APPLE_API_ISSUER`; `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID`;
+  `KOINOS_NOTARY_PROFILE` (+ optional `KOINOS_NOTARY_KEYCHAIN`), a `notarytool store-credentials`
+  profile. A partial set means no notarization, with the missing variables named. Every build that
+  isn't notarized prints one line: "Not notarized: <why>. On other Macs the first open is blocked
+  until the user clicks Open Anyway…".
+- App: `ditto -c -k --keepParent` → `xcrun notarytool submit --wait` (2 h timeout; a rejection
+  fetches `notarytool log`) → `stapler staple` + `validate`. The DMG and zip are then built from the
+  stapled app. DMG: `codesign --sign <Developer ID> --timestamp` → submit → staple. Finally `spctl`
+  must accept the app (execute) and the DMG (open) as "Notarized Developer ID". Passwords are
+  redacted in logs.
+
+Releases (by hand; the coordinator publishes):
+- Build: `KOINOS_ROUTER_SIGN_IDENTITY=- npm run dist:router` on an Apple Silicon Mac with Node 22
+  (`PATH=/opt/homebrew/bin:$PATH` where an older Node comes first) →
+  `Koinos-Router-0.1.0-arm64.dmg` and `.zip`.
+- Check and checksum: `npm run release:router:assets [-- <dist dir>] [--no-verify]`
+  (`release-assets.js`). For each architecture it needs both `Koinos-Router-<version>-<arch>.dmg`
+  and `.zip`, and checks the app inside each (the DMG mounted read-only with `-nobrowse`, the zip
+  unpacked with `ditto` to a temp dir): `codesign --verify --deep --strict` (a failure is what
+  macOS would call "damaged"), `CFBundleShortVersionString` = `ROUTER_VERSION`, `lipo` shows the
+  architecture, and **no Apple Development authority** (refused, with the rebuild command); the DMG
+  must have the `/Applications` link, `.DS_Store` and `.background.tiff`. It reports each file as
+  ad-hoc, Developer ID or notarized (a stapled ticket), warns when they differ, writes
+  `SHA256SUMS.txt` (`shasum -a 256` format) next to them, and prints
+  `gh release create router-v<version> <dmg> <zip> SHA256SUMS.txt --repo levineam/koinos-router
+  --title "Koinos Router <version>" --notes-file router/RELEASE_NOTES-<version>.md`
+  (`KOINOS_ROUTER_RELEASE_REPO` overrides the repo). It never runs `gh`, tags or pushes.
+  Separately, the packaged app should pass `--smoke` with a temp `KOINOS_ROUTER_DATA` (never the
+  owner's data, and never against an installed Router). `spctl` rejects an ad-hoc app; expected.
+- Publish (the coordinator runs the printed command): GitHub Release `router-v<version>` with the
+  DMG, the zip and `SHA256SUMS.txt`, not a draft or prerelease (the update notice ignores those).
+  The README's Download link and the update notice both read `releases/latest`, so a new release
+  needs no doc or code change beyond `ROUTER_VERSION` and its notes.
+- Versioning: semver. Bump `ROUTER_VERSION` for every release: the update notice compares
+  versions, and the tag and artifact names carry it. Core's version moves only when Core is rebased
+  on a newer upstream.
+- Testers' first open: Gatekeeper blocks an ad-hoc, quarantined download. They clear it once per
+  version with System Settings › Privacy & Security › Open Anyway (macOS 15 dropped Control-click ›
+  Open) or `xattr -dr com.apple.quarantine "/Applications/Koinos Router.app"` (README › Download).
+- Developer ID, notarized releases and an update feed are M5 (MVP_SPEC §8.1, §9).
 
 ## Tests
 
@@ -757,8 +904,16 @@ harness configs or the login keychain: they use temp dirs, the in-repo scheduler
 (`server/scheduler.js`), and `core/test/fixtures/fake-llama-server`.
 `router/test/router-core.e2e.test.js` boots `createRouterCore` against the fixture and drives
 onboarding, both switches, Connect, an MCP delegation, the guards and the limits over HTTP.
-`router/test/ui-static.test.js` checks the pages, fonts and CSP; `shell.test.js` the shell's pure
-helpers and the router profile's `require` graph.
+`router/test/ui-static.test.js` checks the pages, fonts and CSP (and the version, update and hint
+UI); `shell.test.js` the shell's pure helpers (launch window, notch hint, external-link allow list)
+and the router profile's `require` graph. `update-check.test.js` drives the update notice with a
+fake fetch and clock (no request ever reaches GitHub); `release-dist.test.js`,
+`release-notarize.test.js` and `shell-signing.test.js` cover Router's version, architectures, the
+per-architecture builder config, identity picking (ad-hoc included) and the notarization decisions
+and arguments, without building, signing or contacting Apple. `release-dmg.test.js` checks the DMG
+layout against `make-dmg-background.js` and the committed backgrounds; `release-assets.test.js`
+covers artifact discovery, `SHA256SUMS.txt`, the signer check (Apple Development refused), the
+printed `gh` command and the DMG detach, without real artifacts and without running `gh`.
 Known pre-existing failures on v0.54.12 (environmental, not ours): 5 tests in
 `core/test/node-data-folder.browser.test.js` (no Chromium at /opt/pw-browsers) and
 `core/test/ollama.test.js` "no system ollama + a provision hook…".

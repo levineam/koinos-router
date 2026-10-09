@@ -216,6 +216,15 @@ function assertStatusShape(st) {
   assert.strictEqual(typeof st.use.connected.claude, "boolean");
   assert.strictEqual(typeof st.wallet.exists, "boolean");
   assert.ok(st.wallet.address === null || typeof st.wallet.address === "string");
+  assert.ok(st.app.version === null || typeof st.app.version === "string");
+  assert.strictEqual(typeof st.app.update.available, "boolean");
+  if (st.app.update.available) {
+    assert.match(st.app.update.version, /^\d+\.\d+\.\d+$/);
+    assert.match(st.app.update.url, /^https:\/\/github\.com\/levineam\/koinos-router\/releases\//);
+  } else {
+    assert.deepStrictEqual(st.app.update, { available: false, version: null, url: null });
+  }
+  assert.ok([null, "notch", "menu-bar"].includes(st.app.hints.menuBar));
 }
 
 test("dev mock serves /core/router/status in the Status contract shape", async () => {
@@ -732,4 +741,133 @@ test("Share on battery turns off plugged-in-only, then Start now takes over whil
   page.runTimers();
   await settle();
   assert.deepStrictEqual(childTexts(detail), ["Starts when you step away · ", "Start now"]);
+});
+
+// ------------------------------------------- version, update notice, hint
+
+const UPDATE_URL = "https://github.com/levineam/koinos-router/releases/tag/router-v0.1.1";
+const withApp = (app) => ({
+  ...STATUS,
+  app: {
+    version: "0.1.0",
+    update: { available: false, version: null, url: null },
+    hints: { menuBar: null },
+    ...app,
+  },
+});
+
+test("dev mock: the update scenario has a release link and the menu-bar hint, which can be dismissed", async () => {
+  await withMock(async (base) => {
+    let { body } = await getJson(`${base}/core/router/status?scenario=update`);
+    assertStatusShape(body);
+    assert.deepStrictEqual(body.app, {
+      version: "0.1.0",
+      update: { available: true, version: "0.1.1", url: UPDATE_URL },
+      hints: { menuBar: "notch" },
+    });
+    await getJson(`${base}/__dev/hint`, post({ name: "menuBar" }));
+    ({ body } = await getJson(`${base}/core/router/status`));
+    assert.strictEqual(body.app.hints.menuBar, null);
+    ({ body } = await getJson(`${base}/core/router/status?scenario=earning`));
+    assert.deepStrictEqual(body.app.update, { available: false, version: null, url: null });
+  });
+});
+
+test("Settings shows the version, and an update with a Download link to its release page", async () => {
+  let status = withApp({});
+  const page = fakePage({ hash: "#settings", routes: ({ url }) => (url === "/core/router/settings" ? {} : status) });
+  page.load("common.js");
+  page.load("app.js");
+  await settle();
+  assert.strictEqual(page.byId("app-version").textContent, "0.1.0");
+  assert.strictEqual(page.byId("app-update").hidden, true);
+  assert.strictEqual(page.byId("update-download").hidden, true);
+
+  status = withApp({ update: { available: true, version: "0.1.1", url: UPDATE_URL } });
+  page.runTimers();
+  await settle();
+  assert.strictEqual(page.byId("app-update").hidden, false);
+  assert.strictEqual(page.byId("app-update").textContent, "· Update available: 0.1.1");
+  assert.strictEqual(page.byId("update-download").hidden, false);
+  assert.strictEqual(page.byId("update-download").href, UPDATE_URL);
+
+  // A link anywhere else is never offered (the shell would refuse it anyway).
+  status = withApp({ update: { available: true, version: "0.1.2", url: "https://evil.example/router.dmg" } });
+  page.runTimers();
+  await settle();
+  assert.strictEqual(page.byId("update-download").hidden, true);
+  assert.strictEqual(page.byId("app-update").hidden, true);
+
+  // Run from the checkout there is no Router version.
+  status = withApp({ version: null });
+  page.runTimers();
+  await settle();
+  assert.strictEqual(page.byId("app-version").textContent, "Development build");
+
+  const html = read("index.html");
+  assert.match(html, /<span class="set-name">Version<\/span>/);
+  assert.match(html, /<a class="btn-quiet btn-quiet--accent" id="update-download" href="#settings" target="_blank" rel="noopener noreferrer" hidden>Download<\/a>/);
+});
+
+test("the menu-bar hint shows under the footer until dismissed, and dismissing tells the shell", async () => {
+  const shellCalls = [];
+  const status = withApp({ hints: { menuBar: "notch" } });
+  const page = fakePage({ routes: () => status, shellCalls });
+  page.load("common.js");
+  page.load("app.js");
+  await settle();
+  assert.strictEqual(page.byId("menubar-hint").hidden, false);
+  assert.strictEqual(page.byId("menubar-hint-text").textContent, "Router lives in your menu bar. Can’t see it? It may be hidden behind the notch.");
+
+  page.byId("menubar-hint-close").dispatch("click");
+  await settle();
+  assert.strictEqual(page.byId("menubar-hint").hidden, true);
+  assert.deepStrictEqual(shellCalls.filter(([name]) => name === "dismissHint"), [["dismissHint", "menuBar"]]);
+  // A poll that still carries the hint (it raced the dismissal) doesn't bring it back.
+  page.runTimers();
+  await settle();
+  assert.strictEqual(page.byId("menubar-hint").hidden, true);
+
+  // Can't tell whether there's a notch: the general wording.
+  const other = fakePage({ routes: () => withApp({ hints: { menuBar: "menu-bar" } }), shellCalls: [] });
+  other.load("common.js");
+  other.load("app.js");
+  await settle();
+  assert.strictEqual(other.byId("menubar-hint-text").textContent, "Router lives in your menu bar, at the top of your screen.");
+  // And none at all: hidden.
+  const none = fakePage({ routes: () => withApp({}), shellCalls: [] });
+  none.load("common.js");
+  none.load("app.js");
+  await settle();
+  assert.strictEqual(none.byId("menubar-hint").hidden, true);
+
+  // It sits under the footer, inside the main view, in the house style.
+  const html = read("index.html");
+  const main = /<section class="view view-main"[\s\S]*?<\/section>/.exec(html)[0];
+  assert.ok(main.indexOf('class="footer"') < main.indexOf('id="menubar-hint"'));
+  assert.match(main, /<button type="button" class="hint-close" id="menubar-hint-close" aria-label="Dismiss">/);
+  const css = read("styles.css");
+  assert.match(css, /\.hint-text {[^}]*font-size: 12\.5px;[^}]*color: var\(--ink-2\);/);
+});
+
+test("the popover shows Update available above Open Router, which opens Settings", async () => {
+  const shellCalls = [];
+  let status = withApp({});
+  const page = fakePage({ routes: () => status, shellCalls });
+  page.load("common.js");
+  page.load("popover.js");
+  await settle();
+  assert.strictEqual(page.byId("pop-update").hidden, true);
+
+  status = withApp({ update: { available: true, version: "0.1.1", url: UPDATE_URL } });
+  page.runTimers();
+  await settle();
+  assert.strictEqual(page.byId("pop-update").hidden, false);
+  page.byId("pop-update").dispatch("click");
+  assert.deepStrictEqual(shellCalls.filter(([name]) => name === "open"), [["open", "settings"]]);
+
+  const html = read("popover.html");
+  const update = html.indexOf('id="pop-update"');
+  assert.ok(update > 0 && update < html.indexOf('id="pop-open"'), "above Open Router");
+  assert.match(html, /<a class="mi mi--update" id="pop-update" href="index\.html#settings" hidden>[\s\S]*?Update available<\/a>/);
 });

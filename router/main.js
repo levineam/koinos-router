@@ -5,8 +5,9 @@
  * boots the router profile of Core in-process (router/lib/router-core.js) and
  * shows the pages the Router gateway serves from router/ui. All product logic
  * lives in RouterService; this file owns only what needs Electron: the tray,
- * the two windows, Mac idle signals, the power blocker, the login item, and
- * the wallet backup/restore dialogs that must never touch the HTTP API.
+ * the two windows, Mac idle signals, the power blocker, the login item, the
+ * update notice, and the wallet backup/restore dialogs that must never touch
+ * the HTTP API.
  *
  * The pure helpers at the top are exported so router/test/shell.test.js can
  * run them in plain Node; the Electron part only runs in Electron's main
@@ -17,13 +18,20 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { LAPTOP_PROBE_MAX_MS } = require("./lib/mac-signals");
+const { isReleaseUrl } = require("./lib/update-check");
 
 const PRODUCT_NAME = "Koinos Router";
 const PRELOAD = path.join(__dirname, "preload.js");
 const TRAY_ICON = path.join(__dirname, "assets", "trayTemplate.png");
 const VIEWS = new Set(["main", "activity", "settings", "welcome", "connect", "restore"]);
 const PAGES = { main: ["/", "/index.html"], popover: ["/popover.html"] };
-const SHELL_METHODS = ["backupWallet", "closePopover", "open", "popoverHeight", "quit", "restoreWallet"];
+const SHELL_METHODS = ["backupWallet", "closePopover", "dismissHint", "open", "popoverHeight", "quit", "restoreWallet"];
+// One-time hints the main window can show; the value stored once one is done.
+const HINTS = { menuBar: "router.hints.menuBar" };
+const HINT_DONE = "done";
+// A notched MacBook's menu bar is 37-38 pt tall (it matches the notch); a
+// plain one is 24-25 pt. Anything from here up means "this screen has a notch".
+const NOTCH_MENU_BAR_MIN = 32;
 
 const MAIN_WIDTH = 600;
 const MAIN_HEIGHT = 540;
@@ -203,6 +211,19 @@ function loginItemAtBoot({ stored, osOpen }) {
 }
 
 /**
+ * Is this app bundle running from somewhere it won't stay: the mounted DMG
+ * (/Volumes/…) or a Gatekeeper App Translocation copy of a quarantined
+ * download (…/AppTranslocation/…)? A login item registered from there points
+ * at a path that disappears, and the copy in Applications would then read
+ * "not registered" and switch Open at login off. So the login item is left
+ * alone until Router runs from where it was installed.
+ */
+function transientAppLocation(execPath) {
+  const p = String(execPath || "");
+  return p.startsWith("/Volumes/") || p.includes("/AppTranslocation/");
+}
+
+/**
  * Device-owner authentication before the recovery key is shown: Touch ID,
  * or the macOS login password where there is no usable Touch ID.
  * promptTouchID evaluates kSecAccessControlUserPresence, which falls back to
@@ -275,6 +296,51 @@ function createGateKick({ inputs, tick, defer = setImmediate }) {
   };
 }
 
+/**
+ * Whether a launch should bring up the main window. Opening Router by hand
+ * always shows it: on a notched MacBook a crowded menu bar can hide the icon,
+ * and a launch that shows nothing looks like it failed. Only a launch macOS
+ * made at login stays quiet, unless onboarding isn't done yet (Router can do
+ * nothing until it is). An unknown answer (no login-item info) shows it.
+ */
+function showMainAtLaunch({ smoke = false, onboarded = true, loginItem = null, platform = process.platform } = {}) {
+  if (smoke) return false;
+  if (!onboarded) return true;
+  if (platform !== "darwin") return true;
+  return loginItem?.wasOpenedAtLogin !== true;
+}
+
+/**
+ * Does this Mac's built-in screen have a notch? Electron exposes no safe-area
+ * insets, but the menu bar on a notched screen is as tall as the notch, so
+ * the gap between the built-in display's bounds and its work area tells.
+ * true | false, or null when it can't be told (no built-in screen in use,
+ * e.g. a desktop Mac or a closed lid, or a menu bar set to hide itself).
+ */
+function notchState(displays) {
+  const builtIn = (Array.isArray(displays) ? displays : []).find((d) => d && d.internal === true && d.bounds && d.workArea);
+  if (!builtIn) return null;
+  const menuBar = builtIn.workArea.y - builtIn.bounds.y;
+  if (!Number.isFinite(menuBar) || menuBar <= 0) return null;
+  return menuBar >= NOTCH_MENU_BAR_MIN;
+}
+
+/**
+ * The menu-bar hint for the main window: "notch" (the icon may be behind the
+ * notch), "menu-bar" (can't tell, so a general pointer), or null. Shown only
+ * after onboarding, until the person dismisses it or clicks the menu-bar icon,
+ * and never on a Mac known to have no notch.
+ */
+function menuBarHint({ onboarded, stored, notch }) {
+  if (onboarded !== true || stored === HINT_DONE || notch === false) return null;
+  return notch === true ? "notch" : "menu-bar";
+}
+
+/** External links a page may open: only Router's GitHub release pages. */
+function externalUrlAllowed(url) {
+  return isReleaseUrl(url);
+}
+
 /** Scale every channel of a BGRA bitmap, which dims a template image evenly. */
 function dimBitmap(buffer, alpha) {
   const out = Buffer.from(buffer);
@@ -297,6 +363,11 @@ module.exports = {
   createStatusTracker,
   createGateKick,
   loginItemAtBoot,
+  transientAppLocation,
+  showMainAtLaunch,
+  notchState,
+  menuBarHint,
+  externalUrlAllowed,
   confirmOwner,
   copyConcealed,
   CONCEALED_TYPES,
@@ -305,6 +376,8 @@ module.exports = {
   TRAY_ICON,
   VIEWS,
   SHELL_METHODS,
+  HINTS,
+  HINT_DONE,
   POPOVER_MIN_HEIGHT,
   POPOVER_MAX_HEIGHT,
 };
@@ -321,6 +394,7 @@ function runShell() {
   const keychainAccess = require("./lib/keychain-access");
   const { createMacSignals } = require("./lib/mac-signals");
   const { IdleController } = require("./lib/idle-policy");
+  const { createUpdateCheck } = require("./lib/update-check");
 
   // stdout/stderr can be a pipe whose reader is gone (Router started by a
   // script that has since exited). Writing then fails with EPIPE as an
@@ -358,6 +432,7 @@ function runShell() {
   let blockerId = null;
   let booted = false;
   let loginItemApplied = null; // what Router last asked the OS for; null until boot syncs it
+  let updates = null; // the update notice; packaged, non-smoke runs only
   let smokeTimer = null;
   let popoverHiddenAt = 0;
   let quitting = false;
@@ -489,6 +564,7 @@ function runShell() {
       onSettings(settings);
       kickGate?.();
     });
+    rc.service.setAppInfo(appInfo);
 
     // The share-model budget (picked once and remembered) and the idle and
     // plugged-in defaults depend on laptop or not: no Share start, and no
@@ -534,7 +610,62 @@ function runShell() {
     if (smoke) return smokeCheck(port);
     createTray(statusTracker.last);
     booted = true;
-    if (!first.onboarded) showMain();
+    if (showMainAtLaunch({ onboarded: first.onboarded, loginItem: loginItemSettings() })) showMain();
+    startUpdateCheck();
+  }
+
+  function loginItemSettings() {
+    try {
+      return app.getLoginItemSettings();
+    } catch (e) {
+      log("login item settings unavailable:", e.message);
+      return null;
+    }
+  }
+
+  // ------------------------------------------------- app info and hints
+
+  // Status.app: this build's version, a newer release if there is one, and
+  // which one-time hint the main window should show.
+  function appInfo() {
+    const settings = rc?.core.settings;
+    let notch = null;
+    try {
+      notch = notchState(screen.getAllDisplays());
+    } catch {
+      /* no screen info: treat as unknown */
+    }
+    return {
+      version: app.isPackaged ? app.getVersion() : null,
+      update: updates ? updates.current() : null,
+      hints: {
+        menuBar: menuBarHint({
+          onboarded: settings?.get("router.onboarded", false) === true,
+          stored: settings?.get(HINTS.menuBar, null),
+          notch,
+        }),
+      },
+    };
+  }
+
+  function dismissHint(name) {
+    const key = Object.hasOwn(HINTS, name) ? HINTS[name] : null;
+    if (!key || !rc || rc.core.settings.get(key, null) === HINT_DONE) return;
+    rc.core.settings.set(key, HINT_DONE);
+    rc.service.appInfoChanged();
+  }
+
+  // Asks GitHub for a newer Router once 30 s after boot, then at most daily.
+  // Never downloads anything; the UI links to the release page. A build run
+  // from the checkout has no Router version to compare, so it doesn't ask.
+  function startUpdateCheck() {
+    if (smoke || !app.isPackaged || process.env.KOINOS_ROUTER_NO_UPDATE_CHECK === "1") return;
+    updates = createUpdateCheck({
+      currentVersion: app.getVersion(),
+      onChange: () => rc?.service.appInfoChanged(),
+      onEvent: (e) => rc?.core.events?.(e),
+    });
+    updates.start();
   }
 
   // ------------------------------------------------------- keychain
@@ -614,6 +745,7 @@ function runShell() {
 
   async function shutdown() {
     kickGate = null;
+    updates?.stop();
     idle?.stop();
     releaseBlocker();
     try {
@@ -697,7 +829,8 @@ function runShell() {
   }
 
   // Pages may only show themselves. Our other page opens in its own window;
-  // anything external opens in the browser; everything else is dropped.
+  // Router's GitHub release pages (the update notice's Download link) open in
+  // the browser; everything else is dropped.
   function guardContents(contents, page) {
     const guard = (event, url) => {
       const target = pageOf(url, origin);
@@ -717,14 +850,8 @@ function runShell() {
   }
 
   function openExternal(url) {
-    try {
-      const u = new URL(url);
-      if ((u.protocol === "https:" || u.protocol === "http:") && u.origin !== origin) {
-        shell.openExternal(u.href).catch(() => {});
-      }
-    } catch {
-      /* not a URL */
-    }
+    if (!externalUrlAllowed(url)) return;
+    shell.openExternal(new URL(url).href).catch(() => {});
   }
 
   function showMain(view) {
@@ -769,6 +896,8 @@ function runShell() {
     unhideApp();
     popover.show();
     popover.focus();
+    // They found the menu-bar icon: the "can't see it?" hint has done its job.
+    dismissHint("menuBar");
   }
 
   function placePopover(height) {
@@ -870,6 +999,10 @@ function runShell() {
   // only when the user changes "Open at login" in Router.
   async function syncLoginItemAtBoot() {
     if (!app.isPackaged || smoke) return;
+    if (transientAppLocation(process.execPath)) {
+      log("running from the disk image or a translocated copy; login item left alone until Router runs from Applications");
+      return;
+    }
     try {
       const osOpen = app.getLoginItemSettings().openAtLogin === true;
       const stored = rc.core.settings.get("router.general.openAtLogin", null);
@@ -916,6 +1049,9 @@ function runShell() {
     });
     handle("router:popover-height", ["popover"], (px) => {
       setPopoverHeight(px);
+    });
+    handle("router:dismiss-hint", ["main"], (name) => {
+      dismissHint(typeof name === "string" ? name : "");
     });
     handle("router:backup-wallet", ["main"], () => backupWallet());
     handle("router:restore-wallet", ["main"], (wif) => restoreWallet(wif));

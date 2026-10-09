@@ -223,6 +223,34 @@ body.window {
 .footer a:hover { color: var(--ink); }
 .footer-sep { width: 1px; height: 14px; background: var(--sep); }
 
+/* One-time "where is the menu-bar icon" line, under the footer. */
+.hint {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px 0 32px;
+  background: var(--accent-soft);
+}
+.hint-text { flex-grow: 1; min-width: 0; margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--ink-2); }
+.hint-close {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.hint-close:hover { color: var(--ink); background: var(--accent-soft-hover); }
+.hint-close svg { display: block; }
+
 /* ---------------------------------------------------------------- switch */
 
 .switch {
@@ -374,6 +402,10 @@ body.window {
 }
 .btn-quiet:hover { background: var(--accent-soft-hover); }
 .btn-quiet:disabled { cursor: default; opacity: 0.5; background: var(--tile); }
+a.btn-quiet { display: inline-flex; align-items: center; }
+.btn-quiet--accent { background: var(--accent-soft); color: var(--accent); }
+.btn-quiet--accent:hover { background: var(--accent-soft-hover); }
+.set-update { color: var(--accent); font-weight: 500; }
 
 /* ------------------------------------------------------------ first run */
 
@@ -588,4 +620,6 @@ body.popover { overflow: hidden; }
   cursor: pointer;
 }
 .mi:hover { background: var(--accent); color: #ffffff; }
+.mi--update { gap: 8px; height: 28px; font-size: 13px; font-weight: 500; color: var(--accent); }
+.update-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .mi:focus-visible { border-radius: 6px; }

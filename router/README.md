@@ -1,11 +1,5 @@
 # Koinos Router
 
-<p>
-  <img src="docs/main-window.png" alt="Koinos Router main window: balance, Share compute and Use KoinosAI switches" width="420">
-  &nbsp;
-  <img src="docs/menu-bar.png" alt="Koinos Router menu-bar popover: balance, today's earned and spent, both switches" width="210">
-</p>
-
 Koinos Router is a macOS menu-bar app with two switches:
 
 - **Share compute** earns KAI by serving Koinos Network jobs while your Mac is idle.
@@ -13,8 +7,132 @@ Koinos Router is a macOS menu-bar app with two switches:
   items, extract fields, convert formats, draft boilerplate) to cheaper network models, paid in KAI.
   Router adds one MCP tool, `delegate`, to each harness. The agent decides when to use it.
 
+<p>
+  <img src="docs/main-window.png" alt="Koinos Router main window: balance, Share compute and Use KoinosAI switches" width="420">
+  &nbsp;
+  <img src="docs/menu-bar.png" alt="Koinos Router menu-bar popover: balance, today's earned and spent, both switches" width="210">
+</p>
+
+## Download
+
+**[Download the latest release](https://github.com/levineam/koinos-router/releases/latest)**:
+`Koinos-Router-<version>-arm64.dmg`, or the `.zip` with the same app in it. To check the download,
+save the release's `SHA256SUMS.txt` next to it and run
+`shasum -a 256 -c --ignore-missing SHA256SUMS.txt` in that folder.
+
+You need a Mac with Apple Silicon (M1 or later) and macOS 12 Monterey or later. Intel Macs aren't
+supported in this release. To spend KAI you also need Codex or Claude Code (CLI or desktop app).
+
+### Install
+
+1. Open the DMG and drag **Koinos Router** onto **Applications**. (With the zip: double-click it,
+   then move `Koinos Router.app` into Applications.) Always run it from Applications, not from the
+   DMG or your Downloads folder: a copy opened from there doesn't set itself to open at login.
+2. Open Koinos Router from Applications. **macOS blocks the first open**: this build isn't signed
+   with an Apple Developer ID or notarized by Apple yet, so macOS says it can't check the app for
+   malware. Click **Done** (not Move to Trash).
+3. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click **Open
+   Anyway** next to "Koinos Router was blocked". Confirm with your login password or Touch ID, and
+   choose **Open Anyway** again when macOS asks. The button is only there for about an hour after
+   you tried to open the app; if it's gone, repeat step 2.
+
+Or skip steps 2 and 3 with one Terminal command, then open the app normally:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Koinos Router.app"
+```
+
+It removes the "downloaded from the internet" flag from that one app. Only run it on a copy you
+downloaded from the release page above. It also clears "Koinos Router is damaged and can't be
+opened", which is the same block in other words.
+
+You do this once per version you download, until Router is notarized. Older macOS: on macOS 13 and
+14 the steps are the same; on macOS 12 the button is in System Preferences › Security & Privacy ›
+General. Before macOS 15 you can also Control-click the app in Applications and choose **Open**.
+
+### First run
+
+- Router opens its window on **Welcome**. Click **Get started**, connect Codex and/or Claude Code
+  on **Connect your tools**, then **Done**. Router creates a wallet for you (there is no password to
+  pick) and turns on both switches. Start a **new** Codex or Claude Code session so it loads the
+  `koinos` tool.
+- Connect adds a `koinos` server to `~/.codex/config.toml` or `~/.claude.json` and a small
+  `koinos-delegate` skill. Router copies each config file once before its first change
+  (`*.koinos-router.bak`) and never touches `CLAUDE.md` or `AGENTS.md`.
+- Already use Router on another Mac? Choose **I already use Koinos Router on another Mac** on
+  Welcome and paste that Mac's recovery key. Both Macs then spend from one balance; Router leaves
+  Share compute off on this one (see Known limitations).
+- **Keychain.** Router keeps its secrets encrypted with a key in your login Keychain, "Koinos Router
+  Safe Storage". Router creates that item itself, so a fresh install asks for nothing. After you
+  install a newer version, macOS may ask once for your login password before the new copy can use
+  it: until Router is signed with a Developer ID, every version is a different app to the Keychain.
+  Router says so first ("One quick permission"). Enter your login password and choose **Always
+  Allow**. If you choose Deny, the wallet stays locked (no sharing or spending) until you choose
+  Try Again or restart Router.
+- **Back up your recovery key**: Settings › Wallet › Back up (Touch ID or your login password). It
+  is the only way to get your balance back after deleting Router or moving to another Mac.
+
+### What to expect
+
+- **KAI is testnet.** It has no cash value.
+- **Share compute** downloads the model engine and a model (about 2.5 GB) the first time it runs.
+  The row shows "Getting ready · N%" meanwhile.
+- On a laptop it shares only when the Mac is **plugged in** and has been **idle for 5 minutes**, and
+  stops within seconds when you come back. While it waits for you to step away, the row offers
+  **Start now** (it switches Settings › When to Always). To share on battery, turn off Settings ›
+  Only when plugged in. A desktop Mac shares whenever it's on, even while you use it (Settings ›
+  When).
+- **Use KoinosAI** spends KAI only when Codex or Claude Code decides to call `delegate`. Activity
+  lists each delegation and what it cost. The daily limit is 10 KAI (Settings › Daily limit).
+- Tasks you delegate run on other people's Macs, and they can read them. Router refuses files that
+  look private (`.env`, keys, `.ssh/`, `~/Library`) and anything that looks like a secret, and the
+  agent gets the reason. Don't delegate code or data you need to keep private.
+
+### Where it lives
+
+- Router lives in the **menu bar**: the K icon with your balance next to it. Click it for the
+  switches; right-click for Open Router and Quit Koinos Router. There is no Dock icon.
+- On a MacBook with a notch, a crowded menu bar can hide the icon behind the notch (Router's
+  window says so once). Open Koinos Router from Applications or Spotlight to bring up its window;
+  this works while it's running too.
+- Router opens at login (Settings › Open at login). It starts quietly in the menu bar then.
+
+### Updates
+
+Router doesn't update itself yet. Once a day it asks GitHub whether a newer release is out (one
+request to `api.github.com`; nothing about you or your wallet is sent). When there is one, the
+menu-bar popover shows **Update available**, and Settings › Version has a **Download** button that
+opens the release page. Settings › Version also shows which version you have.
+
+To update: quit Router, download the new DMG, drag Koinos Router onto Applications and choose
+**Replace**, then open it. Expect Open Anyway again and the one-time Keychain prompt above. Your
+wallet, settings and connections stay.
+
+### Uninstall
+
+1. In **Settings**, **Disconnect** Codex and Claude Code. This removes Router's `koinos` entry and
+   skill from their configs; otherwise they keep pointing at a server that's gone.
+2. If you want to keep your balance, back up your recovery key (Settings › Wallet › Back up).
+3. Quit Router: right-click the menu-bar icon › Quit Koinos Router (or Quit in its popover).
+4. Drag **Koinos Router** from Applications to the Trash.
+5. Optional: delete `~/Library/Application Support/Koinos Router`. **This deletes your wallet.**
+   Without the recovery key, the KAI in it is gone for good. You can also delete the "Koinos Router
+   Safe Storage" item in Keychain Access, and remove Koinos Router from System Settings › General ›
+   Login Items if it's still listed.
+
+### Feedback
+
+Open an issue at https://github.com/levineam/koinos-router/issues with your Mac model, macOS
+version, what you did and what happened. Router's log is
+`~/Library/Application Support/Koinos Router/core/core.log`; look it over before you attach it.
+
+---
+
+The rest of this file is for working on Router.
+
 It is built on KoinosAI Core from this repo (the `router` profile of `createCore`). The full
-KoinosAI app is unchanged. Apple Silicon only.
+KoinosAI app is unchanged. Router has its own version (0.1.0); the Core it is built on is KoinosAI
+0.54.12.
 
 More detail: `docs/MVP_SPEC.md` (what it does and why) and `router/ARCHITECTURE.md` (module
 contracts, exact copy, HTTP surface).
@@ -87,7 +205,8 @@ registering with koinosai.com, and without downloading a model.
 
 Want to work on the pages without Electron or Core at all? `node router/ui/dev-mock.js` serves
 them with an in-memory API at http://127.0.0.1:41190 (add `?scenario=earning`, `waiting`,
-`paused`, `outofkai`, `preparing`, `firstrun` or `notools`).
+`paused`, `outofkai`, `preparing`, `firstrun`, `notools` or `update`; `update` shows the update
+notice and the menu-bar hint).
 
 ## Build
 
@@ -96,16 +215,50 @@ npm run dist:router
 ```
 
 Output: `dist-router/Koinos-Router-<version>-arm64.dmg` and `.zip` (the app itself is in
-`dist-router/mac-arm64/`). Extra arguments go to electron-builder (`npm run dist:router -- --dir`
-builds only the app). The build is configured in `router/electron-builder.yml`: menu-bar only
+`dist-router/mac-arm64/`). `<version>` is Router's own version, `ROUTER_VERSION` in
+`router/scripts/dist-router.js` (0.1.0); the repo's `package.json` keeps Core's (0.54.12). Extra
+arguments go to electron-builder (`npm run dist:router -- --dir` builds only the app);
+`KOINOS_ROUTER_ARCHS=arm64,x64` picks architectures (arm64 is the default and the only one
+released). The build is configured in `router/electron-builder.yml`: menu-bar only
 (`LSUIElement`), hardened runtime, Electron fuses that stop anything else running code inside the
 app (no `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` or `--inspect`; only the integrity-checked
-`app.asar` loads), and no update feed.
+`app.asar` loads), a DMG whose window is one drag onto Applications, and no update feed.
 
 `dist:router` signs the app with the best code-signing identity in your keychain, in this order:
 `KOINOS_ROUTER_SIGN_IDENTITY` if you set it (a name or SHA-1; `-` means ad-hoc), a Developer ID
 Application, an Apple Development identity, the local "Koinos Router Local" identity (below), or
-none (ad-hoc). It prints which one it used.
+none (ad-hoc). It prints which one it used, and whether the build is notarized: only a Developer ID
+build with notary credentials is (`router/scripts/notarize-router.js`; see ARCHITECTURE.md). Every
+other build prints why not, and needs Open Anyway on other Macs.
+
+### Release build (for other people's Macs)
+
+A build you give to anyone else is built **ad-hoc**, whatever is in your keychain:
+
+```sh
+KOINOS_ROUTER_SIGN_IDENTITY=- npm run dist:router
+```
+
+An Apple Development certificate is for running your own builds on your own Macs. Apple's terms
+don't cover giving builds signed with it to other people, and its certificate names your Apple ID
+email, which every copy would carry; `dist:router` reminds you when it uses one. "Koinos Router
+Local" only works on the Mac that made it. Until Router has a Developer ID, the ad-hoc build is what
+testers install, with the Open Anyway step above.
+
+Then get the files ready for GitHub:
+
+```sh
+npm run release:router:assets
+```
+
+It checks the DMG and the zip (valid signature, Router's version, the right architecture, not
+signed with Apple Development, the DMG's Applications link and window), writes
+`dist-router/SHA256SUMS.txt`, and prints the `gh release create router-v<version> …` command with
+`router/RELEASE_NOTES-<version>.md` as the notes. It never runs `gh`, tags or pushes. The release
+on `levineam/koinos-router` carries the DMG, the zip and `SHA256SUMS.txt`. Publish it as a normal
+release (not a draft or prerelease): the Download link above and Router's update notice both read
+`releases/latest`. Bump `ROUTER_VERSION` for every release. More in `router/ARCHITECTURE.md` ›
+Releases.
 
 ## The Keychain prompt, and signing
 
@@ -128,8 +281,9 @@ dialog that follows and choose "Always Allow". If you choose Deny, Router shows 
 Try Again relaunches Router so macOS asks again; Not Now runs with the wallet locked (no sharing or
 spending; the Share row says "Wallet locked · Restart Router") until the next launch.
 
-Fewest prompts: sign with an **Apple Development** certificate. It is free with an Apple ID (Xcode ›
-Settings › Accounts › Manage Certificates) and `dist:router` picks it up by itself.
+Fewest prompts on your own Macs: sign with an **Apple Development** certificate. It is free with an
+Apple ID (Xcode › Settings › Accounts › Manage Certificates) and `dist:router` picks it up by
+itself. Never give anyone a build signed with it (see Release build).
 
 No Apple ID handy? Make the local identity once, then rebuild:
 
@@ -146,9 +300,11 @@ Check what a build was signed with:
 `codesign -dv --verbose=2 "dist-router/mac-arm64/Koinos Router.app"` (look at `Authority` and
 `TeamIdentifier`).
 
-None of this helps on other Macs. Until Router has a Developer ID and is notarized, a build copied
-to another Mac needs System Settings › Privacy & Security › Open Anyway on first open. A Developer
-ID, notarization and updates in place are planned (MVP_SPEC §9, M4).
+None of this helps on other Macs, and the Apple Development and local identities are not for
+builds you give away (see Release build). Until Router has a Developer ID and is notarized, a build
+copied to another Mac needs Open Anyway on first open (see Install), and every new version asks
+once for the Keychain item there. A Developer ID, notarization and updates in place are planned
+(MVP_SPEC §9, M5).
 
 ## Where data lives
 
@@ -176,9 +332,9 @@ The wallet's recovery key is the only way to move your balance to another Mac or
 Settings › Wallet › Back up shows it after Touch ID or your Mac login password. Keep it somewhere
 private. On a new Mac, use "I already use Koinos Router on another Mac" on the Welcome screen.
 
-To remove Router: back up the recovery key, disconnect Codex and Claude Code in Settings (this
-removes the `koinos` entries and the skills), quit Router, then delete the app, the data folder
-above and the Keychain item.
+To remove Router, follow Uninstall above: disconnect Codex and Claude Code in Settings first, back
+up the recovery key, quit, then delete the app and, if you want, the data folder (that deletes the
+wallet) and the Keychain item.
 
 ## Using it with Codex and Claude Code
 
@@ -196,7 +352,7 @@ back wrapped in `<untrusted_output>`, with a footer like `[koinos · koinos-smar
 ## Tests
 
 ```sh
-npm run test:router   # Router suites only (about 375 tests)
+npm run test:router   # Router suites only (about 440 tests)
 npm test              # Core and Router
 ```
 
@@ -208,9 +364,11 @@ network.
 
 ## Known limitations
 
-- Apple Silicon, macOS 12 or later. No Developer ID yet: unless you sign with an Apple
-  Development identity, expect a Keychain prompt after each rebuild; other Macs need Open Anyway;
-  no automatic updates.
+- Apple Silicon, macOS 12 or later.
+- Not signed with a Developer ID and not notarized: each downloaded version needs Open Anyway (or
+  the `xattr` command) once, and asks once for the Keychain item after an update. No automatic
+  updates; Router only tells you a new version is out. Your own builds: unless you sign with an
+  Apple Development identity, expect a Keychain prompt after each rebuild.
 - The network today: 4,096-token context, answers of at most 512 tokens per part, text only, and
   one request at a time per wallet. A delegation can use at most 8 parts and takes up to 180 s.
 - KAI is testnet. It has no cash value.

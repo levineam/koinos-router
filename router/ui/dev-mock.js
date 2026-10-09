@@ -19,7 +19,7 @@ const path = require("node:path");
 
 const UI_DIR = __dirname;
 const DEFAULT_PORT = 41190;
-const SCENARIOS = ["earning", "waiting", "paused", "outofkai", "preparing", "firstrun", "notools"];
+const SCENARIOS = ["earning", "waiting", "paused", "outofkai", "preparing", "firstrun", "notools", "update"];
 const LIMIT_CHOICES = [5, 10, 25, null];
 const EARN_EVERY_MS = 6000;
 const MAX_BODY = 64 * 1024;
@@ -106,6 +106,9 @@ function scenarioState(name, now = Date.now()) {
       claude: { found: true, connected: true, method: "cli" },
     },
     items: sampleItems(now),
+    version: "0.1.0",
+    update: null,
+    hint: null,
     failToggles: false,
     lastTick: now,
   };
@@ -140,6 +143,11 @@ function scenarioState(name, now = Date.now()) {
         codex: { found: true, connected: false, method: null },
         claude: { found: true, connected: false, method: null },
       };
+      break;
+    // A newer release is out, and the one-time menu-bar hint is showing.
+    case "update":
+      s.update = { available: true, version: "0.1.1", url: "https://github.com/levineam/koinos-router/releases/tag/router-v0.1.1" };
+      s.hint = "notch";
       break;
     case "notools":
       s.connections = {
@@ -226,6 +234,11 @@ function computeStatus(s) {
     share,
     use,
     wallet: { exists: !!s.address, address: s.address },
+    app: {
+      version: s.version,
+      update: s.update ? { ...s.update } : { available: false, version: null, url: null },
+      hints: { menuBar: s.onboarded ? s.hint : null },
+    },
   };
 }
 
@@ -392,7 +405,8 @@ const DEV_SHELL = `"use strict";
     quit: function () { console.info("[dev shell] quit"); },
     popoverHeight: function (px) { console.info("[dev shell] popoverHeight", px); },
     backupWallet: function () { return post("/__dev/backup"); },
-    restoreWallet: function (wif) { return post("/__dev/restore", { wif: wif }); }
+    restoreWallet: function (wif) { return post("/__dev/restore", { wif: wif }); },
+    dismissHint: function (name) { return post("/__dev/hint", { name: name }); }
   };
 })();
 `;
@@ -423,6 +437,10 @@ async function handleDev(req, res, url, store) {
   if (url.pathname === "/__dev/scenario") {
     store.reset(url.searchParams.get("name") || "earning");
     return sendJson(res, 200, { ok: true, scenario: store.state.scenario });
+  }
+  if (req.method === "POST" && url.pathname === "/__dev/hint") {
+    s.hint = null;
+    return sendJson(res, 200, { ok: true });
   }
   if (req.method === "POST" && url.pathname === "/__dev/backup") {
     await delay(200);

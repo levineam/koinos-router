@@ -151,6 +151,7 @@ class RouterService extends EventEmitter {
     pricedModels = async () => null,
     tickMs = 5000,
     statusDebounceMs = 150,
+    appInfo = null,
   } = {}) {
     super();
     if (!core || !ledger || !connectors || !settings) throw new TypeError("RouterService needs core, ledger, connectors and settings");
@@ -181,6 +182,43 @@ class RouterService extends EventEmitter {
     this._timer = null;
     this._emitTimer = null;
     this._lastStatusJson = null;
+    this._appInfo = typeof appInfo === "function" ? appInfo : null;
+  }
+
+  // -------------------------------------------------------------- app info
+
+  /**
+   * What the shell knows about the app itself (its version, whether a newer
+   * Router is out, one-time hints), reported as Status.app. The shell sets
+   * the provider after createRouterCore; without one Status.app is empty.
+   */
+  setAppInfo(provider) {
+    this._appInfo = typeof provider === "function" ? provider : null;
+  }
+
+  /** The provider's answer changed (an update was found, a hint dismissed). */
+  appInfoChanged() {
+    this._changed();
+  }
+
+  _app() {
+    let info = null;
+    try {
+      info = this._appInfo ? this._appInfo() : null;
+    } catch (e) {
+      this.log({ type: "router:app-info-failed", message: String(e?.message || e) });
+    }
+    const u = info?.update;
+    const update =
+      u?.available === true && typeof u.version === "string" && typeof u.url === "string"
+        ? { available: true, version: u.version, url: u.url }
+        : { available: false, version: null, url: null };
+    const hint = info?.hints?.menuBar;
+    return {
+      version: typeof info?.version === "string" && info.version ? info.version : null,
+      update,
+      hints: { menuBar: hint === "notch" || hint === "menu-bar" ? hint : null },
+    };
   }
 
   // ------------------------------------------------------------- lifecycle
@@ -256,6 +294,7 @@ class RouterService extends EventEmitter {
       share,
       use,
       wallet: { exists: !!wallet.exists, address: wallet.address || null },
+      app: this._app(),
     };
   }
 

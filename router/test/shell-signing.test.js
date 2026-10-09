@@ -64,8 +64,11 @@ test("identity preference: explicit, Developer ID, Apple Development, Koinos Rou
   const none = sign.pickIdentity([]);
   assert.strictEqual(none.identity, null);
   assert.match(none.reason, /setup-dev-signing\.sh/);
-  // Explicit choices.
-  assert.strictEqual(sign.pickIdentity(ids, { explicit: "-" }).identity, null);
+  // Explicit choices. "-" is ad-hoc, signed by sign-router like any other identity.
+  const adhoc = sign.pickIdentity(ids, { explicit: "-" }).identity;
+  assert.deepStrictEqual(adhoc, { hash: "-", name: "ad-hoc", status: null, kind: "adhoc" });
+  adhoc.name = "changed";
+  assert.strictEqual(sign.ADHOC.name, "ad-hoc", "callers get a copy");
   assert.strictEqual(sign.pickIdentity(ids, { explicit: "2b8ab81c5743b9faea7c09be6812471bde65e5af" }).identity.name, "Koinos Router Local");
   assert.strictEqual(sign.pickIdentity(ids, { explicit: "Some Other Cert" }).identity.kind, "explicit");
   assert.throws(() => sign.pickIdentity(ids, { explicit: "Nope" }), /No code-signing identity matches/);
@@ -94,20 +97,36 @@ test("a team-less identity signs with library validation off, everything else ha
 });
 
 test("dist:router packs unsigned, signs, then builds dmg and zip from the signed app", () => {
-  const signed = dist.plan({ args: [], out: "/tmp/out", signed: true });
-  assert.strictEqual(signed.app, "/tmp/out/mac-arm64/Koinos Router.app");
-  assert.deepStrictEqual(signed.steps, [
-    ["--config", dist.CONFIG, "--mac", "--arm64", "-c.directories.output=/tmp/out", "--dir", "-c.mac.identity=null"],
-    ["--config", dist.CONFIG, "--mac", "--arm64", "-c.directories.output=/tmp/out", "--prepackaged", signed.app, "-c.mac.identity=null"],
+  const cfg = (arch) => `/tmp/cfg/${arch}.json`;
+  const signed = dist.plan({ args: [], out: "/tmp/out", signed: true, configPath: cfg });
+  assert.strictEqual(signed.builds.length, 1, "arm64 only by default");
+  const [b] = signed.builds;
+  assert.strictEqual(b.arch, "arm64");
+  assert.strictEqual(b.app, "/tmp/out/mac-arm64/Koinos Router.app");
+  assert.strictEqual(b.dmg, `/tmp/out/Koinos-Router-${dist.ROUTER_VERSION}-arm64.dmg`);
+  assert.strictEqual(b.zip, `/tmp/out/Koinos-Router-${dist.ROUTER_VERSION}-arm64.zip`);
+  assert.deepStrictEqual(b.steps, [
+    ["--config", "/tmp/cfg/arm64.json", "--mac", "--arm64", "--dir"],
+    ["--config", "/tmp/cfg/arm64.json", "--mac", "--arm64", "--prepackaged", b.app],
   ]);
-  // --dir: no dmg/zip step.
-  assert.strictEqual(dist.plan({ args: ["--dir"], signed: true }).steps.length, 1);
-  assert.strictEqual(dist.plan({ args: [], signed: true }).app, path.join(ROOT, "dist-router", "mac-arm64", "Koinos Router.app"));
-  // No identity: exactly the old command.
-  assert.deepStrictEqual(dist.plan({ args: [], signed: false }).steps, [["--config", dist.CONFIG, "--mac", "--arm64"]]);
-  // KOINOS_ROUTER_SIGN_IDENTITY=-: electron-builder must not pick a Developer ID by itself.
-  assert.deepStrictEqual(dist.plan({ args: ["--dir"], signed: false, adhoc: true }).steps, [["--config", dist.CONFIG, "--mac", "--arm64", "-c.mac.identity=null", "--dir"]]);
-  // The config dist:router builds is the one shell.test.js checks.
+  // electron-builder must not sign (or notarize) by itself: dist-router does.
+  assert.strictEqual(b.config.mac.identity, null);
+  assert.strictEqual(b.config.mac.notarize, false);
+  assert.strictEqual(b.config.directories.output, "/tmp/out");
+  // --dir: no dmg/zip step; other arguments reach both steps.
+  assert.strictEqual(dist.plan({ args: ["--dir"], signed: true, configPath: cfg }).builds[0].steps.length, 1);
+  assert.deepStrictEqual(dist.plan({ args: ["-c.compression=store"], signed: true, configPath: cfg }).builds[0].steps.map((s) => s.at(-1)), [
+    "-c.compression=store",
+    "-c.compression=store",
+  ]);
+  assert.strictEqual(dist.plan({ args: [], signed: true, configPath: cfg }).builds[0].app, path.join(ROOT, "dist-router", "mac-arm64", "Koinos Router.app"));
+  // No identity at all: one plain build, and electron-builder keeps its own (ad-hoc) signing.
+  const plain = dist.plan({ args: ["--dir"], signed: false, configPath: cfg }).builds[0];
+  assert.deepStrictEqual(plain.steps, [["--config", "/tmp/cfg/arm64.json", "--mac", "--arm64", "--dir"]]);
+  assert.ok(!("identity" in plain.config.mac));
+  // Architectures come from KOINOS_ROUTER_ARCHS, never from electron-builder flags.
+  assert.throws(() => dist.plan({ args: ["--x64"], signed: true, configPath: cfg }), /KOINOS_ROUTER_ARCHS/);
+  // The config dist:router builds from is the one shell.test.js checks.
   const builder = yaml.load(fs.readFileSync(path.join(ROOT, dist.CONFIG), "utf8"));
   assert.strictEqual(builder.appId, sign.APP_ID);
   assert.strictEqual(builder.mac.entitlements, path.relative(ROOT, sign.ENTITLEMENTS));

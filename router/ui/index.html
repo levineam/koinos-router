@@ -67,6 +67,13 @@
       <span class="footer-sep" aria-hidden="true"></span>
       <a href="#settings">Settings</a>
     </nav>
+
+    <div class="hint" id="menubar-hint" role="note" hidden>
+      <p class="hint-text" id="menubar-hint-text"></p>
+      <button type="button" class="hint-close" id="menubar-hint-close" aria-label="Dismiss">
+        <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></svg>
+      </button>
+    </div>
   </section>
 
   <section class="view view-page view-activity" id="view-activity" aria-labelledby="activity-title" hidden>
@@ -166,6 +173,13 @@
             <span class="set-meta" id="wallet-address">Not set up yet</span>
           </div>
           <button type="button" class="btn-quiet" id="wallet-backup">Back up</button>
+        </div>
+        <div class="set-row">
+          <div class="set-main">
+            <span class="set-name">Version</span>
+            <span class="set-meta"><span id="app-version">—</span><span class="set-update" id="app-update" hidden></span></span>
+          </div>
+          <a class="btn-quiet btn-quiet--accent" id="update-download" href="#settings" target="_blank" rel="noopener noreferrer" hidden>Download</a>
         </div>
       </div>
     </div>

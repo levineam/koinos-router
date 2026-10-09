@@ -15,6 +15,12 @@
   const ICON_TERMINAL = "M5 7l5 5-5 5M13 17h6";
   const ICON_CODE = "M8 7l-5 5 5 5M16 7l5 5-5 5";
   const TOOL_NAMES = { codex: "Codex", claude: "Claude Code" };
+  // The shell opens only these in the browser (main.js externalUrlAllowed).
+  const RELEASES_URL = "https://github.com/levineam/koinos-router/releases";
+  const HINT_COPY = {
+    notch: "Router lives in your menu bar. Can’t see it? It may be hidden behind the notch.",
+    "menu-bar": "Router lives in your menu bar, at the top of your screen.",
+  };
 
   const $ = (id) => document.getElementById(id);
 
@@ -27,6 +33,8 @@
   let activityLoading = false;
   let settings = null;
   let settingsSaves = 0;
+  let hintDismissed = false;
+  let appKey = "";
   const busyTools = new Set();
 
   const statusClient = createStatusClient({ onStatus: renderStatus });
@@ -70,7 +78,43 @@
     renderHeadline(st.headline);
     renderShare(st);
     renderUse(st);
+    renderApp(st.app);
     if (view === "activity") loadActivity();
+  }
+
+  // ------------------------------------------------- version, update, hint
+
+  function isReleaseUrl(url) {
+    return typeof url === "string" && (url === RELEASES_URL || url.startsWith(`${RELEASES_URL}/`));
+  }
+
+  function renderApp(app) {
+    const update = app?.update?.available && isReleaseUrl(app.update.url) ? app.update : null;
+    const hint = hintDismissed ? null : HINT_COPY[app?.hints?.menuBar] || null;
+    // Rebuild only on change so a focused Download link keeps focus across polls.
+    const key = JSON.stringify([app?.version || null, update?.version || null, update?.url || null, hint]);
+    if (key === appKey) return;
+    appKey = key;
+
+    setText($("app-version"), app?.version || "Development build");
+    const note = $("app-update");
+    setText(note, update ? `· Update available: ${update.version}` : "");
+    note.hidden = !update;
+    const link = $("update-download");
+    if (update) link.href = update.url;
+    link.hidden = !update;
+
+    setText($("menubar-hint-text"), hint || "");
+    $("menubar-hint").hidden = !hint;
+  }
+
+  function bindHint() {
+    $("menubar-hint-close").addEventListener("click", () => {
+      hintDismissed = true;
+      $("menubar-hint").hidden = true;
+      appKey = "";
+      Promise.resolve(shell("dismissHint", "menuBar")).catch(() => {});
+    });
   }
 
   // Getting ready keeps the full-colour orb (under its progress ring) so a
@@ -515,6 +559,7 @@
     bindSettings();
     bindConnect();
     bindRestore();
+    bindHint();
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && (view === "activity" || view === "settings")) location.hash = "#main";

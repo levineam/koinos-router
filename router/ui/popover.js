@@ -1,6 +1,7 @@
 "use strict";
 
-// Menu-bar popover: balance, today's numbers, both switches, Open and Quit.
+// Menu-bar popover: balance, today's numbers, both switches, an "Update
+// available" line when there is one, Open and Quit.
 (function () {
   const {
     fmt1, earnedText, shell, hasShell, setText, setSwitch, createPoller, createStatusClient, bindStatusToggle,
@@ -80,6 +81,7 @@
     setText($("pop-use-status"), useLine(st.use));
     $("pop-share-status").classList.toggle("pop-sub--warn", st.share?.state === "error");
     $("pop-use-status").classList.toggle("pop-sub--warn", ["out-of-kai", "limit"].includes(st.use?.state));
+    $("pop-update").hidden = st.app?.update?.available !== true;
     reportHeight();
   }
 
@@ -101,6 +103,11 @@
       if (!hasShell("open")) return; // plain browser: follow the link
       e.preventDefault();
       shell("open", "main");
+    });
+    $("pop-update").addEventListener("click", (e) => {
+      if (!hasShell("open")) return; // plain browser: follow the link
+      e.preventDefault();
+      shell("open", "settings");
     });
     $("pop-quit").addEventListener("click", () => shell("quit"));
 

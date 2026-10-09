@@ -645,3 +645,55 @@ test("harness configs Router connected are repaired after the port or token chan
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("status.app carries the shell's version, update and hint, normalised", async () => {
+  const s = makeService({ statusDebounceMs: 5 });
+  try {
+    // No provider (tests, the e2e core): an empty app block, never a crash.
+    assert.deepEqual((await s.service.status()).app, {
+      version: null,
+      update: { available: false, version: null, url: null },
+      hints: { menuBar: null },
+    });
+
+    let info = { version: "0.1.0", update: { available: false, version: null, url: null }, hints: { menuBar: "notch" } };
+    s.service.setAppInfo(() => info);
+    assert.deepEqual((await s.service.status()).app, {
+      version: "0.1.0",
+      update: { available: false, version: null, url: null },
+      hints: { menuBar: "notch" },
+    });
+
+    // The update checker found one: appInfoChanged() pushes a status event.
+    const events = [];
+    s.service.on("status", (st) => events.push(st));
+    const url = "https://github.com/levineam/koinos-router/releases/tag/router-v0.1.1";
+    info = { ...info, update: { available: true, version: "0.1.1", url } };
+    s.service.appInfoChanged();
+    await new Promise((r) => setTimeout(r, 40));
+    assert.deepEqual(events.at(-1)?.app.update, { available: true, version: "0.1.1", url });
+
+    // Odd values are dropped rather than passed to the pages.
+    info = { version: 7, update: { available: "yes", version: "0.1.1", url }, hints: { menuBar: "<b>" }, extra: 1 };
+    assert.deepEqual((await s.service.status()).app, {
+      version: null,
+      update: { available: false, version: null, url: null },
+      hints: { menuBar: null },
+    });
+    info = { version: "0.1.0", update: { available: true, version: "0.1.1" }, hints: { menuBar: "menu-bar" } };
+    const half = (await s.service.status()).app;
+    assert.deepEqual(half.update, { available: false, version: null, url: null }, "an update needs its link");
+    assert.equal(half.hints.menuBar, "menu-bar");
+
+    // A provider that throws costs only the app block.
+    s.service.setAppInfo(() => {
+      throw new Error("boom");
+    });
+    const st = await s.service.status();
+    assert.equal(st.app.version, null);
+    assert.equal(st.balance.label, "—");
+  } finally {
+    await s.service.stop();
+    s.cleanup();
+  }
+});

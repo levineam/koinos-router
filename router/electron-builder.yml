@@ -1,9 +1,14 @@
 # Koinos Router packaging (MVP_SPEC §8.1). Build from the repo root:
 #   npm run dist:router
-# which runs router/scripts/dist-router.js: with a stable signing identity
-# (router/scripts/setup-dev-signing.sh makes one) it packs with signing off,
-# re-signs the app with that identity, then builds the dmg and zip from it;
-# without one it is a plain ad-hoc build of this config.
+# which runs router/scripts/dist-router.js. It never builds this file as is:
+# per architecture (KOINOS_ROUTER_ARCHS, default arm64) it writes a copy with
+#   - extraMetadata.version = Router's own version (ROUTER_VERSION in
+#     dist-router.js; Core and the full app keep package.json's version),
+#   - mac.target narrowed to that architecture,
+# then packs with signing off, re-signs the app (sign-router.js picks the
+# identity; KOINOS_ROUTER_SIGN_IDENTITY=- is ad-hoc), notarizes it when it is
+# a Developer ID build with notary credentials (notarize-router.js), and
+# builds the dmg and zip from that app.
 # The full Koinos AI app keeps its own config in package.json "build".
 
 appId: io.koinosai.router
@@ -29,6 +34,8 @@ files:
   # Build and signing helpers run from the checkout, never inside the app.
   - "!router/scripts/**"
   - "!router/ui/dev-mock.js"
+  # The DMG window background is for the disk image, not the app.
+  - "!router/assets/dmg-*"
   # Never required by the router profile (router/test/shell.test.js boots
   # createRouterCore and checks require.cache against this list).
   - "!node_modules/onnxruntime-node{,/**}"
@@ -58,8 +65,31 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   artifactName: Koinos-Router-${version}-${arch}.${ext}
+  # dist-router.js notarizes (and staples) itself, after its own signing.
+  notarize: false
   extendInfo:
     LSUIElement: true
+
+# The disk image: drag the app onto Applications. Icon x/y are centres, in
+# points; they match DMG_LAYOUT in router/scripts/make-dmg-background.js,
+# which draws the background (the @2x file next to it is picked up for Retina,
+# and the window takes the 1x image's size, 540×380).
+dmg:
+  title: Koinos Router
+  background: router/assets/dmg-background.png
+  iconSize: 96
+  iconTextSize: 12
+  contents:
+    - x: 140
+      y: 180
+      type: file
+    - x: 400
+      y: 180
+      type: link
+      path: /Applications
+  # No blockmap: there is no update feed, and a notarized dmg is stapled
+  # after it is built, which would leave a blockmap stale.
+  writeUpdateInfo: false
 
 # Lock the packaged binary down. The main process holds the wallet password,
 # the machine secret and the unlocked signer, and the Keychain trusts this

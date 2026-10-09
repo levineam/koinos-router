@@ -9,7 +9,9 @@
  *   node router/scripts/sign-router.js "dist-router/mac-arm64/Koinos Router.app"
  *
  * Which identity (first match wins):
- *   1. KOINOS_ROUTER_SIGN_IDENTITY: a name or SHA-1 hash; "-" forces ad-hoc.
+ *   1. KOINOS_ROUTER_SIGN_IDENTITY: a name or SHA-1 hash; "-" signs ad-hoc
+ *      (still hardened runtime and Router's entitlements, like the local
+ *      identity below; this is how a release without a Developer ID is built),
  *   2. a valid "Developer ID Application: …" identity,
  *   3. a valid "Apple Development: …" (or "Mac Developer: …") identity — free
  *      with an Apple ID in Xcode; like Developer ID it carries a team ID,
@@ -59,16 +61,19 @@ function parseIdentities(output) {
   return [...byHash.values()];
 }
 
+/** Ad-hoc signing ("codesign --sign -"): no certificate, no team ID. */
+const ADHOC = Object.freeze({ hash: "-", name: "ad-hoc", status: null, kind: "adhoc" });
+
 /**
  * The identity to sign with, from parsed identities.
  * → { identity: { hash, name, status, kind } | null, reason: string }
- *   kind: "explicit" | "developer-id" | "apple-development" | "local"
+ *   kind: "explicit" | "developer-id" | "apple-development" | "local" | "adhoc"
  * Throws when an explicitly requested identity is missing.
  */
 function pickIdentity(identities, { explicit = "" } = {}) {
   const list = Array.isArray(identities) ? identities : [];
   const want = String(explicit || "").trim();
-  if (want === "-") return { identity: null, reason: "KOINOS_ROUTER_SIGN_IDENTITY=- asks for ad-hoc signing" };
+  if (want === "-") return { identity: { ...ADHOC }, reason: "KOINOS_ROUTER_SIGN_IDENTITY=- asks for ad-hoc signing" };
   if (want) {
     const hit = list.find((i) => i.hash === want.toUpperCase()) || list.find((i) => i.name === want) || list.find((i) => i.name.includes(want));
     if (!hit) throw new Error(`No code-signing identity matches KOINOS_ROUTER_SIGN_IDENTITY="${want}".`);
@@ -144,8 +149,8 @@ async function signRouterApp({ app, identity, keychain = process.env.KOINOS_ROUT
   if (!app || !fs.existsSync(path.join(app, "Contents", "Info.plist"))) throw new Error(`Not an app bundle: ${app}`);
   if (!identity || !identity.hash) throw new Error("signRouterApp needs an identity");
   const { signApp } = require("@electron/osx-sign");
-  // Apple-issued identities carry a team ID; anything else (self-signed)
-  // needs library validation off, and gains nothing from Apple's timestamp
+  // Apple-issued identities carry a team ID; anything else (self-signed or
+  // ad-hoc) needs library validation off, and gains nothing from Apple's timestamp
   // server (a local build should not need the network).
   const apple = APPLE_PREFIXES.some((p) => identity.name.startsWith(p));
   const tmp = apple ? null : fs.mkdtempSync(path.join(os.tmpdir(), "koinos-router-sign-"));
@@ -196,6 +201,7 @@ module.exports = {
   designatedRequirement,
   signRouterApp,
   LOCAL_IDENTITY,
+  ADHOC,
   APP_ID,
   ENTITLEMENTS,
   ENTITLEMENTS_INHERIT,

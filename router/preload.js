@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld("routerShell", {
   popoverHeight: (px) => ipcRenderer.invoke("router:popover-height", px),
   backupWallet: () => ipcRenderer.invoke("router:backup-wallet"),
   restoreWallet: (wif) => ipcRenderer.invoke("router:restore-wallet", wif),
+  dismissHint: (name) => ipcRenderer.invoke("router:dismiss-hint", name),
 });

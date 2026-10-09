@@ -164,6 +164,7 @@ test("preload exposes exactly the IPC channels main.js handles", () => {
   assert.deepEqual(handled, [
     "router:backup-wallet",
     "router:close-popover",
+    "router:dismiss-hint",
     "router:open",
     "router:popover-height",
     "router:quit",
@@ -795,4 +796,133 @@ test("packaging flips the Electron fuses that would let other code run inside Ro
 
 test("dist-router/ is ignored by git", () => {
   assert.match(read(".gitignore"), /^dist-router\/$/m);
+});
+
+// ------------------------------------------------- launch window, hints
+
+test("opening Router by hand shows the main window; a login launch stays quiet", () => {
+  const show = shellMain.showMainAtLaunch;
+  const mac = { platform: "darwin", onboarded: true };
+  assert.strictEqual(show({ ...mac, loginItem: { openAtLogin: true, wasOpenedAtLogin: false } }), true, "Finder, Spotlight, Launchpad, open");
+  assert.strictEqual(show({ ...mac, loginItem: { openAtLogin: true, wasOpenedAtLogin: true } }), false, "macOS opened it at login");
+  // No answer from Electron (or a field it no longer sets): show it.
+  assert.strictEqual(show({ ...mac, loginItem: null }), true);
+  assert.strictEqual(show({ ...mac, loginItem: {} }), true);
+  assert.strictEqual(show({ ...mac, loginItem: { wasOpenedAtLogin: "yes" } }), true);
+  // Onboarding not finished: show it, even at login (Router does nothing until then).
+  assert.strictEqual(show({ ...mac, onboarded: false, loginItem: { wasOpenedAtLogin: true } }), true);
+  assert.strictEqual(show({ ...mac, onboarded: false, loginItem: null }), true);
+  // Smoke runs never show a window.
+  assert.strictEqual(show({ ...mac, smoke: true, loginItem: null }), false);
+  assert.strictEqual(show({ ...mac, smoke: true, onboarded: false }), false);
+  // wasOpenedAtLogin is macOS-only.
+  assert.strictEqual(show({ platform: "linux", onboarded: true, loginItem: { wasOpenedAtLogin: true } }), true);
+
+  const src = mainSource();
+  assert.match(src, /if \(showMainAtLaunch\({ onboarded: first\.onboarded, loginItem: loginItemSettings\(\) }\)\) showMain\(\);/);
+  assert.match(src, /function loginItemSettings\(\) {\s*try {\s*return app\.getLoginItemSettings\(\);/);
+  // The smoke check returns before the launch decision, so smoke stays windowless.
+  const boot = src.slice(src.indexOf("async function boot()"));
+  assert.ok(boot.indexOf("if (smoke) return smokeCheck(port);") < boot.indexOf("showMainAtLaunch("));
+  assert.doesNotMatch(src, /if \(!first\.onboarded\) showMain\(\);/);
+});
+
+test("Electron reports wasOpenedAtLogin on macOS", () => {
+  const dts = fs.readFileSync(path.join(ROOT, "node_modules", "electron", "electron.d.ts"), "utf8");
+  const block = /interface LoginItemSettings {([\s\S]*?)\n  }/.exec(dts);
+  assert.ok(block, "LoginItemSettings is declared");
+  assert.match(block[1], /\n    wasOpenedAtLogin: boolean;/);
+});
+
+test("notch detection reads the built-in screen's menu-bar height", () => {
+  const screen = (internal, menuBar, extra = {}) => ({
+    internal,
+    bounds: { x: 0, y: 0, width: 1512, height: 982 },
+    workArea: { x: 0, y: menuBar, width: 1512, height: 982 - menuBar },
+    ...extra,
+  });
+  assert.strictEqual(shellMain.notchState([screen(true, 38)]), true, "14/16-inch MacBook Pro");
+  assert.strictEqual(shellMain.notchState([screen(true, 37)]), true, "MacBook Air M2+");
+  assert.strictEqual(shellMain.notchState([screen(true, 24)]), false, "no notch");
+  assert.strictEqual(shellMain.notchState([screen(true, 25)]), false);
+  assert.strictEqual(shellMain.notchState([screen(true, 0)]), null, "menu bar set to hide itself");
+  assert.strictEqual(shellMain.notchState([screen(false, 25)]), null, "desktop Mac or closed lid");
+  assert.strictEqual(shellMain.notchState([]), null);
+  assert.strictEqual(shellMain.notchState(null), null);
+  // A second display beside the built-in one: the built-in one decides.
+  const external = { ...screen(false, 25), bounds: { x: 1512, y: -300, width: 2560, height: 1440 }, workArea: { x: 1512, y: -275, width: 2560, height: 1415 } };
+  assert.strictEqual(shellMain.notchState([external, screen(true, 38)]), true);
+  assert.strictEqual(shellMain.notchState([external, screen(true, 24)]), false);
+});
+
+test("the menu-bar hint shows after onboarding until dismissed, and never on a Mac without a notch", () => {
+  const hint = shellMain.menuBarHint;
+  assert.strictEqual(hint({ onboarded: true, stored: null, notch: true }), "notch");
+  assert.strictEqual(hint({ onboarded: true, stored: null, notch: null }), "menu-bar", "can't tell: a general pointer, once");
+  assert.strictEqual(hint({ onboarded: true, stored: null, notch: false }), null);
+  assert.strictEqual(hint({ onboarded: false, stored: null, notch: true }), null, "not during onboarding");
+  assert.strictEqual(hint({ onboarded: true, stored: shellMain.HINT_DONE, notch: true }), null, "dismissed");
+  assert.deepStrictEqual(shellMain.HINTS, { menuBar: "router.hints.menuBar" });
+
+  const src = mainSource();
+  // Dismissed from the page (main window only), or done once the icon was clicked.
+  assert.match(src, /handle\("router:dismiss-hint", \["main"\], \(name\) => {\s*dismissHint\(typeof name === "string" \? name : ""\);/);
+  assert.match(src, /popover\.focus\(\);\s*\/\/[^\n]*\n\s*dismissHint\("menuBar"\);/);
+  assert.match(src, /const key = Object\.hasOwn\(HINTS, name\) \? HINTS\[name\] : null;/);
+  assert.match(src, /rc\.core\.settings\.set\(key, HINT_DONE\);\s*rc\.service\.appInfoChanged\(\);/);
+});
+
+test("the update notice is wired to Status.app and never runs in smoke or from source", () => {
+  const src = mainSource();
+  assert.match(src, /rc\.service\.setAppInfo\(appInfo\);/);
+  // Before rc.start(): the first status already carries the app block.
+  assert.ok(src.indexOf("rc.service.setAppInfo(appInfo);") < src.indexOf("const port = await rc.start();"));
+  assert.match(src, /if \(smoke \|\| !app\.isPackaged \|\| process\.env\.KOINOS_ROUTER_NO_UPDATE_CHECK === "1"\) return;/);
+  assert.match(src, /createUpdateCheck\({\s*currentVersion: app\.getVersion\(\),/);
+  assert.match(src, /onChange: \(\) => rc\?\.service\.appInfoChanged\(\)/);
+  assert.match(src, /updates\?\.stop\(\);/);
+  assert.match(src, /version: app\.isPackaged \? app\.getVersion\(\) : null,/);
+});
+
+test("pages can open only Router's GitHub release pages in the browser", () => {
+  const allowed = shellMain.externalUrlAllowed;
+  assert.strictEqual(allowed("https://github.com/levineam/koinos-router/releases/tag/router-v0.1.1"), true);
+  assert.strictEqual(allowed("https://github.com/levineam/koinos-router/releases"), true);
+  for (const url of [
+    "https://example.com/",
+    "http://github.com/levineam/koinos-router/releases",
+    "https://github.com/levineam/koinos-router",
+    "https://github.com/someone/else/releases",
+    "https://koinosai.com/",
+    "file:///Applications",
+    "x-apple.systempreferences:com.apple.preference.security",
+    "not a url",
+  ]) {
+    assert.strictEqual(allowed(url), false, url);
+  }
+  const src = mainSource();
+  const fn = /function openExternal\(url\) {([\s\S]*?)\n  }/.exec(src);
+  assert.ok(fn, "openExternal exists");
+  assert.match(fn[1], /if \(!externalUrlAllowed\(url\)\) return;/);
+  assert.equal((src.match(/shell\.openExternal\(/g) || []).length, 1, "every external open goes through the allow-list");
+  // Both ways a page can leave (navigate, window.open) end in openExternal.
+  assert.match(src, /if \(target === "main"\) return showMain\(new URL\(url\)\.hash\.slice\(1\)\);\s*openExternal\(url\);/);
+  assert.match(src, /else openExternal\(url\);\s*return { action: "deny" };/);
+});
+
+test("the login item is left alone while Router runs from the DMG or a translocated copy", () => {
+  const transient = shellMain.transientAppLocation;
+  assert.strictEqual(transient("/Applications/Koinos Router.app/Contents/MacOS/Koinos Router"), false);
+  assert.strictEqual(transient("/Users/me/Applications/Koinos Router.app/Contents/MacOS/Koinos Router"), false);
+  assert.strictEqual(transient("/Volumes/Koinos Router/Koinos Router.app/Contents/MacOS/Koinos Router"), true, "the mounted DMG");
+  assert.strictEqual(
+    transient("/private/var/folders/xy/abc/T/AppTranslocation/1234-ABCD/d/Koinos Router.app/Contents/MacOS/Koinos Router"),
+    true,
+    "a quarantined download Gatekeeper translocated",
+  );
+  assert.strictEqual(transient(""), false);
+  assert.strictEqual(transient(undefined), false);
+  const src = mainSource();
+  const sync = src.slice(src.indexOf("async function syncLoginItemAtBoot()"));
+  assert.ok(sync.indexOf("transientAppLocation(process.execPath)") < sync.indexOf("app.setLoginItemSettings"), "checked before anything is registered");
 });

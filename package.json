@@ -23,6 +23,7 @@
     "router:demo": "node router/scripts/local-demo.js",
     "router:setup-signing": "bash router/scripts/setup-dev-signing.sh",
     "dist:router": "node router/scripts/dist-router.js",
+    "release:router:assets": "node router/scripts/release-assets.js",
     "start": "node scripts/run-test.js",
     "live-senses:prepare": "node scripts/prepare-live-senses.js",
     "postinstall": "node scripts/prepare-live-senses.js",
